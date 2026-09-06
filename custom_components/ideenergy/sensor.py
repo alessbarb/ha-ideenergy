@@ -15,6 +15,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301,
 # USA.
 
+
 import itertools
 from datetime import datetime
 from functools import cached_property
@@ -83,6 +84,9 @@ class IDeEnergySensor(CoordinatorEntity, HistoricalSensor, SensorEntity):
         name = self.I_DE_ENTITY_NAME
         return slugify(f"{cups}-{name}", separator="-")
 
+    # ==
+    # Entity
+    # ==
     async def async_added_to_hass(self) -> None:
         LOGGER.info(f"{self.entity_id} added to hass")
         await super().async_added_to_hass()
@@ -90,7 +94,9 @@ class IDeEnergySensor(CoordinatorEntity, HistoricalSensor, SensorEntity):
         for x in self.I_DE_DATA_SET:
             self.coordinator.activate_dataset(x)
 
+        # await self.async_update_historical()
         await self.coordinator.async_request_refresh()
+        # await self.async_write_historical()
         LOGGER.info(f"{self.entity_id} updated historical")
 
     async def async_will_remove_from_hass(self) -> None:
@@ -104,9 +110,13 @@ class IDeEnergySensor(CoordinatorEntity, HistoricalSensor, SensorEntity):
         """Handle updated data from the coordinator."""
         self.hass.async_create_task(self.async_write_historical())
 
+    # It's a coordinator entity, do nothing
     async def async_update_historical(self) -> None:
-        """Do nothing because data is supplied by the coordinator."""
+        pass
 
+    # ==
+    # Historical sensor
+    # ==
     @property
     def historical_states(self) -> list[HistoricalState]:
         return cast(
@@ -128,18 +138,26 @@ class IDeEnergySensor(CoordinatorEntity, HistoricalSensor, SensorEntity):
     async def async_calculate_statistic_data(
         self, hist_states: list[HistoricalState], *, latest: dict | None = None
     ) -> list[StatisticData]:
-        """Convert historical states into ordered hourly statistics."""
+        #
+        # Filter out invalid states. Zero is a legitimate energy value and must
+        # be preserved in Home Assistant statistics.
+        #
+
         n_original_hist_states = len(hist_states)
-        hist_states = [state for state in hist_states if state.state is not None]
+        hist_states = [x for x in hist_states if x.state is not None]
         if len(hist_states) != n_original_hist_states:
             LOGGER.warning(
-                f"{self.entity_id}: found invalid null values in historical statistics"
+                f"{self.entity_id}: "
+                + "found some weird values in historical statistics"
             )
 
-        # groupby only groups adjacent values, so never depend on the remote API
-        # returning periods in chronological order. Zero-consumption periods are
-        # legitimate measurements and must remain in the statistics stream.
-        hist_states = sorted(hist_states, key=lambda state: state.timestamp)
+        # itertools.groupby only combines adjacent values. Explicit sorting
+        # avoids depending on the remote API returning periods in order.
+        hist_states = sorted(hist_states, key=lambda x: x.timestamp)
+
+        #
+        # Group historical states by hour block
+        #
 
         def hour_block_for_hist_state(hist_state: HistoricalState) -> datetime:
             secs_per_hour = 60 * 60
@@ -155,6 +173,9 @@ class IDeEnergySensor(CoordinatorEntity, HistoricalSensor, SensorEntity):
 
         latest = await hass_get_last_statistic(self.hass, self.get_statistic_metadata())
 
+        #
+        # Get last sum sum from latest
+        #
         def extract_last_sum(latest) -> float:
             return float(latest["sum"]) if latest else 0
 
@@ -176,19 +197,26 @@ class IDeEnergySensor(CoordinatorEntity, HistoricalSensor, SensorEntity):
             + f"(registed at {start_point_local_dt})"
         )
 
+        #
+        # Calculate statistic data
+        #
+
         ret = []
 
         for hour_block, collection_it in itertools.groupby(
             hist_states, key=hour_block_for_hist_state
         ):
             collection = list(collection_it)
-            hour_accumulated = sum(x.state for x in collection)
+
+            # hour_mean = statistics.mean([x.state for x in collection])
+            hour_accumulated = sum([x.state for x in collection])
             total_accumulated = total_accumulated + hour_accumulated
 
             ret.append(
                 StatisticData(
                     start=dt_util.utc_from_timestamp(hour_block),
                     state=hour_accumulated,
+                    # mean=hour_mean,
                     sum=total_accumulated,
                 )
             )
@@ -230,6 +258,9 @@ class AccumulatedConsumption(RestoreSensor, CoordinatorEntity, SensorEntity):
             self._attr_native_value = reading[MEASURE_ACCUMULATED_KEY]
             self.async_write_ha_state()
 
+    # ==
+    # Entity
+    # ==
     async def async_added_to_hass(self) -> None:
         LOGGER.info(f"{self.entity_id} added to hass")
         await super().async_added_to_hass()
@@ -289,19 +320,58 @@ class HistoricalGeneration(IDeEnergySensor):
         return self.coordinator.data[IDeEnergyCoordinatorDataSet.HISTORICAL_GENERATION]
 
 
+##
+# Migrate this to attributes in a general sensor
+# Using statistics for the isolated points representing demand peaks has no sense
+
+# class PowerDemandPeaks(IDeEnergySensor):
+#     I_DE_PLATFORM = PLATFORM
+#     I_DE_ENTITY_NAME = "Power Demand Peaks"
+#     I_DE_DATA_SET = {IDeEnergyCoordinatorDataSet.POWER_DEMAND_PEAKS}
+
+#     # def __init__(self, *args, **kwargs):
+#     #     super().__init__(*args, **kwargs)
+#     #     self._attr_device_class = SensorDeviceClass.ENERGY
+#     #     self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+#     #
+#     #     # TOTAL vs TOTAL_INCREASING:
+#     #     #
+#     #     # It's recommended to use state class total without last_reset whenever
+#     #     # possible, state class total_increasing or total with last_reset should only be
+#     #     # used when state class total without last_reset does not work for the sensor.
+#     #     # https://developers.home-assistant.io/docs/core/entity/sensor/#how-to-choose-state_class-and-last_reset
+#     #
+#     #     # The sensor's value never resets, e.g. a lifetime total energy consumption or
+#     #     # production: state_class total, last_reset not set or set to None
+#     #
+#     #     self._attr_state_class = SensorStateClass.TOTAL
+
+#     def get_statistic_metadata(self):
+#         meta = super().get_statistic_metadata()
+#         meta["unit_class"] = SensorDeviceClass.POWER
+#         meta["unit_of_measurement"] = UnitOfPower.KILO_WATT
+#         return meta
+
+#     @property
+#     def historical_states(self) -> list[HistoricalState] | None:
+#         return self.coordinator.data[
+#             IDeEnergyCoordinatorDataSet.POWER_DEMAND_PEAKS
+#         ]  # ty:ignore[non-subscriptable]
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: IntegrationIDeEnergyConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    ide_classes = [AccumulatedConsumption, HistoricalConsumption, HistoricalGeneration]
+    IDeClasses = [AccumulatedConsumption, HistoricalConsumption, HistoricalGeneration]
     async_add_entities(
         [
-            ide_class(
+            IDeClass(
                 coordinator=entry.runtime_data.coordinator,
                 device_info=entry.runtime_data.device_info,
             )
-            for ide_class in ide_classes
+            for IDeClass in IDeClasses
         ]
     )
 
