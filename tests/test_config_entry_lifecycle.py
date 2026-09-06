@@ -40,7 +40,9 @@ async def start_user_flow(hass):
     )
 
 
-async def submit_credentials(hass, result, username="user@example.com", password="secret"):
+async def submit_credentials(
+    hass, result, username="user@example.com", password="secret"
+):
     return await hass.config_entries.flow.async_configure(
         result["flow_id"],
         {CONF_USERNAME: username, CONF_PASSWORD: password},
@@ -125,7 +127,9 @@ async def test_reauth_updates_credentials_and_preserves_cups(hass, monkeypatch):
         return FakeAPI()
 
     monkeypatch.setattr(config_flow, "create_api", fake_create_api)
-    monkeypatch.setattr(hass.config_entries, "async_reload", AsyncMock(return_value=True))
+    monkeypatch.setattr(
+        hass.config_entries, "async_reload", AsyncMock(return_value=True)
+    )
 
     result = await hass.config_entries.flow.async_init(
         DOMAIN,
