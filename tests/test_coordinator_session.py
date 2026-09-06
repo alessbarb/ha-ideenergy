@@ -113,7 +113,9 @@ async def test_403_reauthenticates_once_and_retries_once(hass):
 
     client.login.assert_awaited_once_with()
     assert client.get_measure.await_count == 2
-    assert data[IDeEnergyCoordinatorDataSet.DIRECT_READING][MEASURE_ACCUMULATED_KEY] == 321
+    assert (
+        data[IDeEnergyCoordinatorDataSet.DIRECT_READING][MEASURE_ACCUMULATED_KEY] == 321
+    )
 
 
 async def test_503_becomes_update_failed_and_records_attempt(hass):
