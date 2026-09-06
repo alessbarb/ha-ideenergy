@@ -35,3 +35,27 @@ jobs:
 
       - name: Compile integration
         run: python -m compileall -q custom_components/ideenergy
+
+  tests:
+    name: Home Assistant tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install \
+            "pytest-homeassistant-custom-component==0.13.364" \
+            "ideenergy>=2.0.1.dev3" \
+            "homeassistant-historical-sensor==3.0.0a4"
+
+      - name: Run tests
+        run: python -m pytest -q
