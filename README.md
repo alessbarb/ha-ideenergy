@@ -10,84 +10,73 @@
 [![CodeQL](https://github.com/ldotlopez/ha-ideenergy/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/ldotlopez/ha-ideenergy/actions/workflows/codeql-analysis.yml)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/ambv/black)
 
-[ideenergy](https://github.com/ldotlopez/ideenergy) integration for [home-assistant](https://home-assistant.io/)
+[ideenergy](https://github.com/ldotlopez/ideenergy) integration for [Home Assistant](https://home-assistant.io/).
 
-i-DE (Iberdrola Distribución) Custom Integration for Home Assistant, providing sensors for Spanish Energy Distributor [i-DE](https://i-de.es).
+i-DE (Iberdrola Distribución) Custom Integration for Home Assistant, providing energy data for customers of the Spanish electricity distributor [i-DE](https://i-de.es).
 
-This integration requires an **advanced** user profile on i-DE website.
+This integration requires an **advanced** user profile on the i-DE website.
 
-**⚠️ Make sure to read the '[FAQ](https://github.com/ldotlopez/ha-ideenergy/blob/main/FAQ.md)', 'Dependencies' and 'Warning' sections**
+> **3.x is an alpha series.** It is a rewrite of the 2.x integration and uses Home Assistant statistics instead of manipulating the recorder database directly. Read the [upgrade notes](UPGRADE-TO-3.x.md) before migrating an existing installation.
 
+**Please read the [FAQ](FAQ.md), Dependencies and Warnings sections before installing.**
 
-## Features
+## Features in 3.x
 
-* Integration with the Home Assistant Energy Panel.
+- Home Assistant Energy Dashboard integration through statistics.
+- Accumulated consumption sensor based on direct meter readings.
+- Historical consumption statistics with sub-kWh precision.
+- Historical generation statistics, disabled by default.
+- Support for multiple contracts/service points as separate config entries.
+- Configuration through the Home Assistant UI; no YAML configuration is required.
+- Asynchronous API access and Home Assistant `DataUpdateCoordinator` integration.
+- Persistent per-dataset request throttling, so restart cycles do not reset the normal fetch interval.
 
-* Accumulated and Instant consumption sensors.
+### Current request intervals
 
-* Historical sensors (both consumption and solar generation) with better (sub-kWh) precision. This data is not realtime and usually has a 24-hour to 48-hour offset.
+The coordinator itself wakes periodically, but remote i-DE datasets are fetched only when their own refresh window is due:
 
-* Support for multiple contracts (service points).
+| Dataset | After a successful fetch | After a failed attempt |
+| --- | ---: | ---: |
+| Accumulated/direct meter reading | 6 hours | 5 minutes |
+| Historical consumption | 12 hours | 5 minutes |
+| Historical generation | 12 hours | 5 minutes |
 
-* Configuration through [Home Assistant Interface](https://developers.home-assistant.io/docs/config_entries_options_flow_handler) without the need to edit YAML files.
+These limits are intentional. The i-DE service-point API is unreliable and excessive requests can result in temporary account blocking.
 
-* Update algorithm to read the meter near the end of each hourly period (between minute 50 and 59)
-with a better representation of consumption in the Home Assistant energy panel.
+### Not currently exposed in 3.x
 
-* Fully [asynchronous](https://developers.home-assistant.io/docs/asyncio_index) and integrated with HomeAssistant.
-
+The 3.x code can receive an instantaneous value together with a direct meter reading, but it does **not** currently expose a separate Instant Consumption entity. Documentation from the 2.x series that referred to an instant sensor or to an hourly minute-50-to-59 update window does not describe the current 3.x implementation.
 
 ## Dependencies
 
-You must have an i-DE username and access to the Clients' website. You may register here: [Área Clientes | I-DE - Grupo Iberdrola](https://www.i-de.es/consumidores/web/guest/login).
+You need an i-DE username and access to the customer website. You can register through the [i-DE customer area](https://www.i-de.es/consumidores/web/guest/login).
 
-It also necessary to have an "Advanced User" profile. Should you not have one already, you need to fill the request for from your [Profile Area](https://www.i-de.es/consumidores/web/home/personal-area/userData).
+An **Advanced User** profile is also required. If your account does not have one, request it from the profile area on the i-DE website.
 
+The integration depends on the separate [`ideenergy`](https://github.com/ldotlopez/ideenergy) Python client and on [`homeassistant-historical-sensor`](https://github.com/ldotlopez/ha-historical-sensor).
 
 ## Installation
 
-### Using [HACS](https://hacs.xyz/) (recommended)
+### HACS custom repository
 
-1. Copy this repository URL: [https://github.com/ldotlopez/ha-ideenergy](https://github.com/ldotlopez/ha-ideenergy/)
+1. Open HACS in Home Assistant.
+2. Add `https://github.com/ldotlopez/ha-ideenergy` as a **Custom repository** with category **Integration**.
+3. Download the desired release.
+4. Restart Home Assistant.
+5. Go to **Settings → Devices & services → Add integration** and select **i-DE Energy Monitor**.
+6. Enter your i-DE credentials and select the contract/service point to monitor.
 
-2. In the HACS section, add this repository as a custom one:
+To monitor more than one service point, add one config entry per contract.
 
+### Manual installation
 
-  - On the "repositorysitory" field put the URL copied before
-  - On the "Category" select "Integration"
-  - Click the "Download" button and download latest version.
+1. Download or clone this repository.
+2. Copy `custom_components/ideenergy` into the `custom_components` directory of your Home Assistant configuration.
+3. Restart Home Assistant.
+4. Add **i-DE Energy Monitor** from **Settings → Devices & services**.
+5. Enter your credentials and select the contract to monitor.
 
-  ![Custom repositorysitory](https://user-images.githubusercontent.com/59612788/171965822-4a89c14e-9eb2-4134-8de2-1d3f380663e4.png)
-
-3. Restart HA
-
-4. Configure the integration
-
-  - (Option A) Click the "Add integration" button → [![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=ideenergy)
-
-  - (Option B) Go to "Settings"  "Devices & Services" and click "+ ADD INTEGRATION" and select "i-de.es energy sensors".  
-    ![image](https://user-images.githubusercontent.com/59612788/171966005-e58f6b88-a952-4033-82c6-b1d4ea665873.png)
-
-5. Follow the configuration steps: provide your credentials for access to i-DE and select the contract that you want to monitor. (Should you need to add more contracts, just follow the previous step as many times as needed).
-
-
-### Manually
-
-1. Download/clone this repository: [https://github.com/ldotlopez/ha-ideenergy](https://github.com/ldotlopez/ha-ideenergy/)
-
-2. Copy the `custom_components/ideenergy` folder into your custom_components folder into your HA installation
-
-3. Restart HA
-
-4. Configure the integration
-
-  - (Option A) Click on this button → [![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=ideenergy)
-  - (Option B) Go to "Settings" → "Devices & Services" and click "+ ADD INTEGRATION" and select "i-de.es energy sensors".  
-    ![image](https://user-images.githubusercontent.com/59612788/171966005-e58f6b88-a952-4033-82c6-b1d4ea665873.png)
-
-5. Follow the configuration steps: provide your credentials for access to i-DE and select the contract that you want to monitor. (Should you need to add more contracts, just follow the previous step as many times as needed).
-
-## Snapshots
+## Screenshots
 
 *Accumulated energy sensor*
 
@@ -103,14 +92,16 @@ It also necessary to have an "Advanced User" profile. Should you not have one al
 ![snapshot](screenshots/configuration-2.png)
 
 ## Warnings
-This extension provides an 'historical' sensor to incorporate data from the past into Home Assistant database. For your own safety the sensor is not enabled by default and must be enabled manually.
 
-☠️ Historic sensor is based on a **high experimental hack** and can broke and/or corrupt your database and/or statistics. **Use at your own risk**.
+- The 3.x series is still alpha software and can change between prereleases.
+- i-DE does not provide a public API contract for this integration. Changes to its website/private endpoints can break authentication or data retrieval without notice.
+- Direct meter readings are notably less reliable than historical data. Do not build safety-critical or unattended control logic around them.
+- Be conservative with direct-reading sensors when several contracts are configured. Excessive service-point requests can trigger temporary blocking by i-DE.
+- Historical data is delayed by i-DE, commonly by roughly 24 to 48 hours.
 
 ## License
 
-This project is licensed under the GNU General Public License v3.0 License - see the LICENSE file for details
-
+This project is licensed under the GNU General Public License v3.0. See [LICENSE](LICENSE).
 
 ## Disclaimer
 
