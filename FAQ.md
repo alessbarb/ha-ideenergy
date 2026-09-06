@@ -1,55 +1,49 @@
 # FAQ
 
-## Q. Why "X" doesn't work
+## Why does a feature not work?
 
-A. Most features in this integration are experimental. If it's not listed as supported it's **not** supported. Double-check this.
+The 3.x line is alpha software and is also a rewrite of the 2.x integration. If a feature is not listed as supported in the README, do not assume that an older 2.x feature has already been ported.
 
+In particular, 3.x currently exposes an **Accumulated Consumption** direct-reading sensor but does not expose a separate **Instant Consumption** entity.
 
-## Q. Accumulated (or instant) consumption sensor is in an unknown state or doesn't show any data.
+## Why is the Accumulated Consumption sensor unknown or not changing?
 
+The accumulated sensor reads the physical service point through i-DE. That endpoint is significantly less reliable than the historical endpoints and individual requests can fail or take a long time.
 
-A. Due to connectivity issues or i-DE server issues, you may not always obtain readings as expected. Keep in mind that sometimes a delay on the reading may occurr.
+The integration deliberately avoids frequent retries. After a successful direct reading it waits six hours before another direct read is due. After a failed direct-reading attempt, the retry throttle is five minutes.
 
-Those two sensors read data directly from your service point. The i-de API for this data is **very** unreliable, > 50% of the calls fail. We try out best to circumvent this situation but we can't do magic.
+A missing update therefore does not necessarily mean that Home Assistant or the integration is broken. Check the integration logs for the underlying connection/authentication error and avoid repeatedly reloading the integration to force calls to i-DE.
 
-Also, due to connectivity issues or i-DE server issues, you may not always obtain readings as expected.
+## Can I make direct meter readings update more frequently?
 
-Give it some time, two or three days, before filing a bug.
+This is intentionally conservative. i-DE can temporarily block users that query service-point endpoints too often, and direct reads are already unreliable.
 
+The current 3.x implementation uses a six-hour success interval for direct readings. Historical datasets use a twelve-hour success interval. Failed dataset attempts are throttled for five minutes.
 
-## Q. Why accumulated (or instant) consumption sensors are only updated once at hour? Can be this interval shorter?
+The old 2.x documentation describing a minute-50-to-59 hourly window and several retries per window does not apply to the current 3.x coordinator.
 
-These sensors need to read the service point directly.
+## Why can accumulated consumption appear unchanged?
 
-The i-de.es service point API is not very reliable, we try up to three calls before giving up in each update window (interval 50-59 of each hour).
+The direct meter reading reports accumulated energy with limited precision. If the meter has not advanced enough to change the returned accumulated value, Home Assistant will continue to show the previous value until a later successful reading reflects the increase.
 
-On the other hand, the i-de.es platform blocks users if the service point is queried your user if he queries the service point too often. In our experience, no more than 5-6 calls in 10 minutes.
+## Why do Historical Consumption or Historical Generation not show a normal current state?
 
-The policy of updating the sensors only once an hour is given by the sum of these two situations.
+These entities exist to feed past measurements into Home Assistant statistics rather than to represent a live meter value. Use the History/Energy views to inspect their data.
 
-## Q. Accumulated (or instant) consumption sensor shows 0 increment at some intervals.
+Historical information is not real-time; i-DE commonly publishes it with roughly a 24-to-48-hour delay.
 
-A. Readings from this sensors only returns integer values. If from the last reading your meter indicates a variance minor then 1 kWh, the integration will not reflect any variance and that will only be recorded once the variance from the previous reading is greater then 1.
+The 3.x implementation uses `homeassistant-historical-sensor` and Home Assistant statistics. It no longer follows the old 2.x design that directly manipulated recorder database rows.
 
+## What should I do if I have multiple contracts?
 
-## Q. Historical sensors (consumption and generation) doesn't have a value
+Each configured contract is a separate Home Assistant config entry. Historical data is the safest choice when several service points are configured because it does not require frequent direct meter access.
 
-A. They are not supposed to. Historical sensors are a hack, HomeAssistant is not supposed to have historical sensors.
+Be conservative about enabling direct accumulated readings for many contracts at the same time. Every enabled direct-reading entity can generate service-point requests when its own refresh window is due, and i-DE may temporarily block an account that generates excessive traffic.
 
-Historical sensors can't provide the current state, Home Assistant will show "undefined" state forever, it's OK and intentional. To view historical data you have to go [History](https://my.home-assistant.io/redirect/history/) → Select any historical sensor →  Go back some days.
+## Does restarting Home Assistant reset the request throttle?
 
-Keep in mind that historical data has a ~24h delay.
+No. The coordinator stores the success/attempt timestamps used by its dataset throttles, so a Home Assistant restart does not intentionally reset the normal request interval.
 
-Until 1.1.0 those sensors doen't generate statistic data. You need this data to them as an energy source in the energy panel.
+## Is this an official i-DE integration?
 
-Before 1.1.0 you have to use the "Accumulated consumption" sensor as a source for the energy panel.
-
-## Q. I have a problem with multiple contracts: I got banned/Doesn't work
-
-We recommend disabling the "Accumulated" and "Instant" sensors if you have multiple contracts.
-
-Due to some issues with the API and rate limit it's very possible that i-de bans you have a few hours of running this integration.
-
-**Important**: Having multiple contracts it's different of having **configured** multiple contracts. You can have multiple contracts but have only one configured in Home Assistant, or you can have multiple contracts added in HomeAssistant but only one (or none) with mentioned sensors enabled.
-
-If you have multiple contracts I recommend you to only enable historical sensors.
+No. It uses endpoints exposed by the i-DE customer service rather than a stable public API contract. i-DE can change authentication, payloads or availability without notice, so temporary breakage is always possible.
