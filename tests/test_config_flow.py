@@ -3,12 +3,15 @@
 from typing import Any
 
 import ideenergy
+import pytest
 from homeassistant import config_entries
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.data_entry_flow import FlowResultType
 
 from custom_components.ideenergy import config_flow
 from custom_components.ideenergy.const import CONF_CONTRACT, DOMAIN
+
+pytestmark = pytest.mark.asyncio
 
 CONTRACT = {
     "cups": "ES0000000000000000AB",
