@@ -60,7 +60,9 @@ async def test_setup_transient_failure_is_retryable(hass, monkeypatch):
     entry.add_to_hass(hass)
     response = Mock(status=503, reason="Service Unavailable")
     client = SimpleNamespace(
-        get_contract_details=AsyncMock(side_effect=ideenergy.RequestFailedError(response))
+        get_contract_details=AsyncMock(
+            side_effect=ideenergy.RequestFailedError(response)
+        )
     )
     monkeypatch.setattr(
         "custom_components.ideenergy.get_i_de_energy_api",
