@@ -10,78 +10,71 @@
 [![CodeQL](https://github.com/ldotlopez/ha-ideenergy/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/ldotlopez/ha-ideenergy/actions/workflows/codeql-analysis.yml)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/ambv/black)
 
-[ideenergy](https://github.com/ldotlopez/ideenergy) integration for [home-assistant](https://home-assistant.io/)
+Integración de [ideenergy](https://github.com/ldotlopez/ideenergy) para [Home Assistant](https://home-assistant.io/).
 
-Esta integración provee sensores para el distribuidor de energía español [i-DE](i-de.es).
+Esta integración proporciona datos energéticos para clientes de la distribuidora eléctrica española [i-DE](https://i-de.es).
 
-Require de un usuario **avanzado** en la página web del distribuidor.
+La integración requiere un perfil de usuario **avanzado** en el área privada de i-DE.
 
-**⚠️ Asegurese de leer la [FAQ](https://github.com/ldotlopez/ha-ideenergy/blob/main/FAQ.md)' y las secciones 'advertencias' y 'dependencias'.**
+> **La serie 3.x está en fase alpha.** Es una reescritura de la integración 2.x y utiliza las estadísticas de Home Assistant en lugar de manipular directamente la base de datos del recorder. Lee las [notas de actualización](UPGRADE-TO-3.x.md) antes de migrar una instalación existente.
 
-## Características
+**Lee la [FAQ](FAQ.md) y las secciones Dependencias y Advertencias antes de instalar.**
 
-* Integración con el panel del energía de Home Assistant
+## Funcionalidades de 3.x
 
-* Sensores de consumo instantaneo y acumulado.
+- Integración con el panel de Energía de Home Assistant mediante estadísticas.
+- Sensor de consumo acumulado basado en lecturas directas del contador.
+- Estadísticas de consumo histórico con precisión sub-kWh.
+- Estadísticas de generación histórica, desactivadas por defecto.
+- Soporte para varios contratos/puntos de suministro mediante entradas de configuración independientes.
+- Configuración desde la interfaz de Home Assistant, sin necesidad de YAML.
+- Acceso asíncrono a la API e integración mediante `DataUpdateCoordinator`.
+- Limitación de frecuencia persistente por dataset, de forma que los reinicios no reinician los intervalos normales de consulta.
 
-* Sensores históricos (consumulo y generación solar) con mayor precisión (sub-kWh). Estos datos no son tiempo real y normalmente llevan un retraso de entre 24 y 48 horas.
+### Intervalos de consulta actuales
 
-* Soporte para varios contratos (puntos de servicio).
+El coordinador se despierta periódicamente, pero solo consulta a i-DE cuando el dataset correspondiente ha alcanzado su ventana de actualización:
 
-* Configuración a través del [interfaz web de Home Assistant](https://developers.home-assistant.io/docs/config_entries_options_flow_handler) sin necesidad de editar ficheros YAML.
+| Dataset | Tras una consulta correcta | Tras un intento fallido |
+| --- | ---: | ---: |
+| Lectura directa / consumo acumulado | 6 horas | 5 minutos |
+| Consumo histórico | 12 horas | 5 minutos |
+| Generación histórica | 12 horas | 5 minutos |
 
-* Algoritmo de actualización para leer el contador cerca del final de cada periodo horario (entre el minuto 50 y 59) y una mejor representación del consumo en el panel de energía de Home Assistant
+Estos límites son intencionados. La API privada del punto de suministro de i-DE puede ser inestable y un exceso de solicitudes puede provocar bloqueos temporales de la cuenta.
 
-* Totalmente [asíncrono](https://developers.home-assistant.io/docs/asyncio_index) e integrado en Home Assistant.
+### No disponible actualmente en 3.x
 
+El código 3.x recibe un valor instantáneo junto con algunas lecturas directas del contador, pero **no expone actualmente una entidad separada de Consumo instantáneo**. La documentación antigua de 2.x que describía un sensor instantáneo o una actualización horaria entre los minutos 50 y 59 ya no corresponde con la implementación actual.
 
-## Dependencies
+## Dependencias
 
-Es necesario disponer de acceso al área de clientes de i-DE.
-Puedes registrarte en el siguiente link: [Área Clientes | I-DE - Grupo Iberdrola](https://www.i-de.es/consumidores/web/guest/login).
+Necesitas un usuario de i-DE con acceso al área privada. Puedes registrarte desde el [área de clientes de i-DE](https://www.i-de.es/consumidores/web/guest/login).
 
-Además es necesario disponer del perfil de "Usuario avanzado". Si no se dispone de él hay que rellenar un formulario del [Perfil de cliente](https://www.i-de.es/consumidores/web/home/personal-area/userData).
+También necesitas el perfil de **Usuario avanzado**. Si tu cuenta no lo tiene, debes solicitarlo desde el perfil del área privada de i-DE.
 
-### Usando [HACS](https://hacs.xyz/) (recomendado)
-
-1. Copia la dirección de este repositorio: [https://github.com/ldotlopez/ha-ideenergy](https://github.com/ldotlopez/ha-ideenergy/)
-
-2. Añade este repositorio en HACS como "repositorio manual":
-
-  - En el campo "Repositorio" pega la URL anterior.
-  - En el campo "Categoría" elige "Integración"
-  - Pulsa el botón "Descargar" y elige la última versión.
-
-  ![Custom repository](https://user-images.githubusercontent.com/59612788/171965822-4a89c14e-9eb2-4134-8de2-1d3f380663e4.png)
-
-3. Reinicia Home Assistant
-
-4. Configura la integración
-
-  - (Opción A) Pulsa el botón "Añadir integración" → [![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=ideenergy)
-
-  - (Opción B) Navega a "Ajustes" → "Dispositivos y servicios" y pulsa "Añadir integración". Elige "i-DE.es sensores de energía".  
-    ![image](https://user-images.githubusercontent.com/59612788/171966005-e58f6b88-a952-4033-82c6-b1d4ea665873.png)
-
-5. Sigue los pasos del asistente: Proporciona tus credenciales de acceso para el área de cliente de "i-DE", después elige el contrato qu deseas monitorizar. Si necesitas añadir más contratos repite los pasos anteriores para cada uno de ellos.
+La integración depende del cliente Python independiente [`ideenergy`](https://github.com/ldotlopez/ideenergy) y de [`homeassistant-historical-sensor`](https://github.com/ldotlopez/ha-historical-sensor).
 
 ## Instalación
 
-A través de custom_components o [HACS](https://hacs.xyz/)
+### Repositorio personalizado de HACS
 
-1. Descarga o clona este repositorio: [https://github.com/ldotlopez/ha-ideenergy](https://github.com/ldotlopez/ha-ideenergy)
+1. Abre HACS en Home Assistant.
+2. Añade `https://github.com/ldotlopez/ha-ideenergy` como **Repositorio personalizado**, categoría **Integración**.
+3. Descarga la versión deseada.
+4. Reinicia Home Assistant.
+5. Ve a **Ajustes → Dispositivos y servicios → Añadir integración** y selecciona **i-DE Energy Monitor**.
+6. Introduce tus credenciales de i-DE y selecciona el contrato/punto de suministro que quieras monitorizar.
 
-2. Copia la carpeta `custom_components/ideenergy` en tu carpeta `custom_components` de tu instalación de Home Assistant.
+Para monitorizar varios puntos de suministro, crea una entrada de configuración independiente para cada contrato.
 
-3. Reinicia Home Assistant
-4. Configura la integración
+### Instalación manual
 
-  - (Opción A) Pulsa el botón "Añadir integración" → [![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=ideenergy)
-
-  - (Opción B) Navega a "Ajustes" → "Dispositivos y servicios" y pulsa "Añadir integración". Elige "i-DE.es sensores de energía".  
-    ![image](https://user-images.githubusercontent.com/59612788/171966005-e58f6b88-a952-4033-82c6-b1d4ea665873.png)
-
-5. Sigue los pasos del asistente: Proporciona tus credenciales de acceso para el área de cliente de "i-DE", después elige el contrato qu deseas monitorizar. Si necesitas añadir más contratos repite los pasos anteriores para cada uno de ellos.
+1. Descarga o clona este repositorio.
+2. Copia `custom_components/ideenergy` dentro del directorio `custom_components` de tu configuración de Home Assistant.
+3. Reinicia Home Assistant.
+4. Añade **i-DE Energy Monitor** desde **Ajustes → Dispositivos y servicios**.
+5. Introduce tus credenciales y selecciona el contrato que quieras monitorizar.
 
 ## Capturas
 
@@ -98,9 +91,18 @@ A través de custom_components o [HACS](https://hacs.xyz/)
 ![snapshot](screenshots/configuration-1.png)
 ![snapshot](screenshots/configuration-2.png)
 
-
-
 ## Advertencias
-Esta integración provee un sensor 'histórico' que incorpora datos del pasado en la base de datos de Home Assistant. Por su propia seguridad este sensor no está habilitado y debe activarse manualmente.
 
-☠️ El sensor histórico está basado en un **hack extremadamente experimental** y puede romper y/o corromper su base de datos y/o estadísticas. **Use lo bajo su propio riesgo**.
+- La serie 3.x sigue siendo software alpha y puede cambiar entre versiones preliminares.
+- i-DE no ofrece un contrato de API público para esta integración. Los cambios en su web o endpoints privados pueden romper la autenticación o la obtención de datos sin previo aviso.
+- Las lecturas directas del contador son sensiblemente menos fiables que los datos históricos. No construyas automatizaciones críticas o de seguridad que dependan de ellas.
+- Sé conservador con las lecturas directas cuando tengas varios contratos configurados. Un exceso de peticiones puede provocar bloqueos temporales por parte de i-DE.
+- Los datos históricos llegan con retraso desde i-DE, normalmente de unas 24 a 48 horas.
+
+## Licencia
+
+Este proyecto se distribuye bajo la GNU General Public License v3.0. Consulta [LICENSE](LICENSE).
+
+## Descargo de responsabilidad
+
+ESTE PROYECTO NO ESTÁ ASOCIADO NI RELACIONADO DE NINGÚN MODO CON LAS EMPRESAS DEL GRUPO IBERDROLA NI CON NINGUNA OTRA. La información incluida aquí y en línea tiene fines educativos y de referencia; los desarrolladores no respaldan ni fomentan usos inapropiados y no asumen responsabilidad legal por la funcionalidad o seguridad de tus dispositivos.
