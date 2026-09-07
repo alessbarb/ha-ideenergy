@@ -1,17 +1,38 @@
 {
   "config": {
     "abort": {
-      "already_configured": "Device is already configured"
+      "already_configured": "Device is already configured",
+      "reauth_successful": "Re-authentication was successful",
+      "reconfigure_successful": "Reconfiguration successful"
     },
     "error": {
       "cannot_connect": "Failed to connect",
+      "contract_not_found": "The configured supply point was not found in this i-DE account.",
       "invalid_auth": "Invalid authentication",
       "unknown": "Unexpected error"
     },
     "step": {
+      "contract": {
+        "data": {
+          "contract": "Contract"
+        }
+      },
+      "reauth_confirm": {
+        "description": "Enter valid i-DE credentials for this supply point.",
+        "data": {
+          "password": "Password",
+          "username": "Username"
+        }
+      },
+      "reconfigure": {
+        "description": "Reconnect this entry while preserving its CUPS identity.",
+        "data": {
+          "password": "Password",
+          "username": "Username"
+        }
+      },
       "user": {
         "data": {
-          "name": "Name",
           "password": "Password",
           "username": "Username"
         }

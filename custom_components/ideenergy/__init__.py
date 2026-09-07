@@ -15,7 +15,6 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301,
 # USA.
 
-
 import logging
 import os
 
@@ -23,7 +22,8 @@ import ideenergy
 from homeassistant.config_entries import ConfigEntry, ConfigEntryNotReady
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.helpers.aiohttp_client import async_create_clientsession
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.loader import async_get_loaded_integration
 
@@ -50,26 +50,24 @@ async def async_setup_entry(
     """Set up this integration using UI."""
     setup_domain_data(hass)
 
-    ##
-    # Setup API
     client = get_i_de_energy_api(hass, entry)
 
     try:
         contract_details = await client.get_contract_details()
-    except ideenergy.ClientError as e:
-        LOGGER.debug(f"Unable to initialize integration: {e}")
-        return False
+    except (ideenergy.CommandError, ideenergy.UserExpiredError) as exc:
+        raise ConfigEntryAuthFailed("i-DE rejected the configured credentials") from exc
+    except ideenergy.ClientError as exc:
+        raise ConfigEntryNotReady("Unable to connect to i-DE") from exc
+
+    cups = str(contract_details["cups"])
+    if entry.unique_id is None:
+        hass.config_entries.async_update_entry(entry, unique_id=cups)
 
     device_info = get_i_de_energy_device_info(contract_details)
 
-    ##
-    # Setup config entry state
     config_entry_state = IDeEnergyConfigEntryState(hass, entry)
     await config_entry_state.async_load()
 
-    ##
-    # Setup coordinator
-    # https://developers.home-assistant.io/docs/integration_fetching_data
     coordinator = IDeEnergyDataCoordinator(
         hass=hass,
         client=client,
@@ -77,22 +75,14 @@ async def async_setup_entry(
         update_interval=UPDATE_INTERVAL,
     )
     await coordinator.async_config_entry_first_refresh()
-    if not coordinator.last_update_success:
-        raise ConfigEntryNotReady
 
-    ##
-    # Setup integration runtime data
     entry.runtime_data = IntegrationIDeEnergyRunTimeData(
         coordinator=coordinator,
-        # config_entry_state=config_entry_state,
         integration=async_get_loaded_integration(hass, entry.domain),
         device_info=device_info,
     )
 
-    ##
-    # Forward setups
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    entry.async_on_unload(entry.add_update_listener(async_reload_entry))
 
     return True
 
@@ -105,38 +95,15 @@ async def async_unload_entry(
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
 
-async def async_reload_entry(
-    hass: HomeAssistant,
-    entry: IntegrationIDeEnergyConfigEntry,
-) -> None:
-    """Reload config entry."""
-    await hass.config_entries.async_reload(entry.entry_id)
-
-
-# async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry):
-#     raise NotImplementedError()
-#
-#     api = get_i_de_energy_api(hass, entry)
-#
-#     try:
-#         contract_details = await api.get_contract_details()
-#     except ideenergy.ClientError as e:
-#         LOGGER.debug(f"Unable to initialize integration: {e}")
-#         return False
-#
-#     # update_integration(hass, entry, get_i_de_energy_device_info(contract_details))
-#     return True
-
-
 def get_i_de_energy_api(hass: HomeAssistant, entry: ConfigEntry):
-
+    """Build the i-DE API client for a config entry."""
     if bool(os.environ.get("HASS_I_DE_MOCK", "")):
-        ClientCls = ideenergy.MockClient
+        client_cls = ideenergy.MockClient
     else:
-        ClientCls = ideenergy.Client
+        client_cls = ideenergy.Client
 
-    return ClientCls(
-        session=async_get_clientsession(hass),
+    return client_cls(
+        session=async_create_clientsession(hass),
         username=entry.data[CONF_USERNAME],
         password=entry.data[CONF_PASSWORD],
         contract=entry.data[CONF_CONTRACT],
@@ -144,6 +111,7 @@ def get_i_de_energy_api(hass: HomeAssistant, entry: ConfigEntry):
 
 
 def get_i_de_energy_device_info(contract_details):
+    """Build Home Assistant device information for an i-DE contract."""
     return DeviceInfo(
         identifiers={
             ("cups", contract_details["cups"]),
