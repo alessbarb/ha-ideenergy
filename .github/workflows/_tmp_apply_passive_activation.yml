@@ -1,0 +1,54 @@
+name: Temporary apply passive dataset activation
+
+on:
+  push:
+    branches:
+      - fix/session-recovery
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/session-recovery
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Remove implicit refresh from dataset activation
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          coordinator = Path("custom_components/ideenergy/coordinator.py")
+          text = coordinator.read_text()
+          old = '''        if self.dataset_counter[dataset.name] == 1:\n            LOGGER.info(f"[{self._client}] dataset {dataset.name} enabled")\n            # Fix a better place for this call, it's sub-optimal\n            self.hass.async_create_task(self.async_request_refresh())\n\n'''
+          new = '''        if self.dataset_counter[dataset.name] == 1:\n            LOGGER.info(f"[{self._client}] dataset {dataset.name} enabled")\n\n'''
+          if text.count(old) != 1:
+              raise SystemExit("unexpected dataset activation implementation")
+          coordinator.write_text(text.replace(old, new))
+
+          tests = Path("tests/test_coordinator_session.py")
+          text = tests.read_text()
+          marker = "async def test_dataset_activation_does_not_schedule_implicit_refresh"
+          if marker not in text:
+              text += '''\n\nasync def test_dataset_activation_does_not_schedule_implicit_refresh(hass):\n    client = make_client()\n    coordinator = make_coordinator(hass, client, make_state())\n    coordinator.async_request_refresh = AsyncMock()\n\n    coordinator.activate_dataset(IDeEnergyCoordinatorDataSet.DIRECT_READING)\n\n    assert coordinator.dataset_counter[IDeEnergyCoordinatorDataSet.DIRECT_READING.name] == 1\n    coordinator.async_request_refresh.assert_not_called()\n'''
+          tests.write_text(text)
+          PY
+      - run: python -m pip install --upgrade pre-commit
+      - name: Apply repository formatting
+        run: pre-commit run --files custom_components/ideenergy/coordinator.py tests/test_coordinator_session.py || true
+      - name: Commit changes
+        run: |
+          if git diff --quiet; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add custom_components/ideenergy/coordinator.py tests/test_coordinator_session.py
+          git commit -m "fix: keep dataset activation passive"
+          git push origin HEAD:fix/session-recovery
