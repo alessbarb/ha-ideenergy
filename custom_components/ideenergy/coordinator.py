@@ -25,7 +25,7 @@ from logging import getLogger
 
 import ideenergy
 from homeassistant.core import HomeAssistant, dt_util
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant_historical_sensor import HistoricalState
 
 from .const import LOCAL_TZ, UPDATE_INTERVAL
@@ -92,7 +92,13 @@ class IDeEnergyDataCoordinator(DataUpdateCoordinator[IDeEnergyDataCoordinatorDat
         update_interval: timedelta = UPDATE_INTERVAL,
     ):
         name = f"{client} coordinator" if client else "i-de coordinator"
-        super().__init__(hass, LOGGER, name=name, update_interval=update_interval)
+        super().__init__(
+            hass,
+            LOGGER,
+            name=name,
+            update_interval=update_interval,
+            always_update=False,
+        )
 
         # Use dataset names as keys so all counter accesses are consistent.
         self.dataset_counter = {ds.name: 0 for ds in IDeEnergyCoordinatorDataSet}
@@ -105,8 +111,6 @@ class IDeEnergyDataCoordinator(DataUpdateCoordinator[IDeEnergyDataCoordinatorDat
         self.dataset_counter[dataset.name] += 1
         if self.dataset_counter[dataset.name] == 1:
             LOGGER.info(f"[{self._client}] dataset {dataset.name} enabled")
-            # Fix a better place for this call, it's sub-optimal
-            self.hass.async_create_task(self.async_request_refresh())
 
         LOGGER.debug(
             f"[{self._client}] dataset {dataset.name} ref_count incremented"
@@ -125,7 +129,7 @@ class IDeEnergyDataCoordinator(DataUpdateCoordinator[IDeEnergyDataCoordinatorDat
             LOGGER.info(f"[{self._client}] dataset {dataset.name} disabled")
 
     async def _async_setup(self) -> None:
-        """Set up the coordinator
+        """Set up the coordinator.
 
         This is the place to set up your coordinator,
         or to load data, that only needs to be loaded once.
@@ -133,61 +137,62 @@ class IDeEnergyDataCoordinator(DataUpdateCoordinator[IDeEnergyDataCoordinatorDat
         This method will be called automatically during
         coordinator.async_config_entry_first_refresh.
         """
-        # await self._client.login()
-        pass
 
     async def _async_update_data(self) -> IDeEnergyDataCoordinatorData:
-        """Fetch data from API endpoint.
-
-        This is the place to pre-process the data to lookup tables
-        so entities can quickly look up their data.
-
-        See: https://developers.home-assistant.io/docs/integration_fetching_data/
-        """
-
-        # Raising 'asyncio.TimeoutError' or 'aiohttp.ClientError' are already
-        # handled by the data update coordinator.
-
-        # Raising ConfigEntryAuthFailed will cancel future updates
-        # and start a config flow with SOURCE_REAUTH (async_step_reauth)
-
-        # Raise UpdateFailed is something were wrong
-
+        """Fetch data from API endpoints only when a dataset is due."""
         active_datasets = [k for k, v in self.dataset_counter.items() if v > 0]
         dsstr = ", ".join(active_datasets)
         LOGGER.debug(f"[{self._client}] datasets enabled: {dsstr}")
 
         updated_data = {}
-
         fns = {
             IDeEnergyCoordinatorDataSet.HISTORICAL_CONSUMPTION: self._async_get_historical_consumption,
             IDeEnergyCoordinatorDataSet.HISTORICAL_GENERATION: self._async_get_historical_generation,
             IDeEnergyCoordinatorDataSet.POWER_DEMAND_PEAKS: self._async_get_power_demand_peaks,
             IDeEnergyCoordinatorDataSet.DIRECT_READING: self._async_get_direct_reading_data,
         }
-        await self._client.renew_session()
-        LOGGER.info(f"[{self._client}] session renewed")
 
         for ds, fn in fns.items():
-            if self.dataset_counter[ds.name] > 0:
-                try:
-                    updated_data[ds] = await fn()
-                except ideenergy.ClientError:
-                    LOGGER.exception(
-                        f"[{self._client}] error updating dataset '{ds.name}'"
-                    )
-                    continue
-                if updated_data[ds] is None:
-                    LOGGER.info(
-                        f"[{self._client}] {ds.name}: dataset was not refreshed"
-                    )
-                else:
-                    LOGGER.info(f"[{self._client}] {ds.name}: dataset updated")
+            if self.dataset_counter[ds.name] == 0:
+                continue
 
-        data = self.data | {k: v for k, v in updated_data.items() if v is not None}
-        return data
+            try:
+                updated_data[ds] = await fn()
+            except ideenergy.ClientError as exc:
+                raise UpdateFailed(f"Error updating i-DE dataset {ds.name}") from exc
 
-    async def _async_get_direct_reading_data(self) -> dict[str, int | float]:
+            if updated_data[ds] is None:
+                LOGGER.debug(f"[{self._client}] {ds.name}: dataset was not refreshed")
+            else:
+                LOGGER.info(f"[{self._client}] {ds.name}: dataset updated")
+
+        return self.data | {k: v for k, v in updated_data.items() if v is not None}
+
+    async def _async_call_client(self, afn: Callable, *args, **kwargs):
+        """Call an authenticated client endpoint with one bounded auth retry.
+
+        The coordinator must not keep the remote session alive merely because
+        Home Assistant is running. A login happens only immediately before a
+        real data request when the local session has expired. If i-DE rejects
+        an otherwise locally-valid session with HTTP 401/403, authenticate
+        once and retry the original operation once. Transient server failures
+        are deliberately propagated to DataUpdateCoordinator instead of being
+        converted into login loops.
+        """
+        if not self._client.is_logged:
+            await self._client.login()
+
+        try:
+            return await afn(*args, **kwargs)
+        except ideenergy.RequestFailedError as exc:
+            status = getattr(exc.response, "status", None)
+            if status not in (401, 403):
+                raise
+
+            await self._client.login()
+            return await afn(*args, **kwargs)
+
+    async def _async_get_direct_reading_data(self) -> dict[str, int | float] | None:
         if self._state_is_too_recent_with_debug(
             key=DIRECT_READING_LAST_SUCCESS_STORED_STATE_KEY,
             max_age=DIRECT_READING_LAST_SUCCESS_MAX_AGE,
@@ -206,7 +211,7 @@ class IDeEnergyDataCoordinator(DataUpdateCoordinator[IDeEnergyDataCoordinatorDat
             success_key=DIRECT_READING_LAST_SUCCESS_STORED_STATE_KEY,
             attempt_key=DIRECT_READING_LAST_ATTEMPT_STORED_STATE_KEY,
         ):
-            data = await self._client.get_measure()
+            data = await self._async_call_client(self._client.get_measure)
 
         return {
             MEASURE_ACCUMULATED_KEY: data.accumulate,
@@ -250,7 +255,7 @@ class IDeEnergyDataCoordinator(DataUpdateCoordinator[IDeEnergyDataCoordinatorDat
                 LOGGER.exception(f"[{self._client}] invalid DemandAtInstant '{dai!r}'")
                 return None
 
-        data = await self._client.get_historical_power_demand()
+        data = await self._async_call_client(self._client.get_historical_power_demand)
         hist_states = [
             historical_power_demand_as_historical_state(dai) for dai in data.demands
         ]
@@ -289,7 +294,7 @@ class IDeEnergyDataCoordinator(DataUpdateCoordinator[IDeEnergyDataCoordinatorDat
             success_key=last_success_state_key,
             attempt_key=last_attempt_state_key,
         ):
-            data = await afn(start=start, end=end)
+            data = await self._async_call_client(afn, start=start, end=end)
 
         def as_historical_state(
             pv: ideenergy.PeriodValue,
