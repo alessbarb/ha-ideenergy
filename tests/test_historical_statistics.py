@@ -14,6 +14,7 @@ def make_subject(hass):
     return SimpleNamespace(
         hass=hass,
         entity_id="sensor.test_historical_consumption",
+        I_DE_ENTITY_NAME="Historical Consumption",
         get_statistic_metadata=lambda: {"statistic_id": "sensor.test"},
     )
 
