@@ -111,8 +111,6 @@ class IDeEnergyDataCoordinator(DataUpdateCoordinator[IDeEnergyDataCoordinatorDat
         self.dataset_counter[dataset.name] += 1
         if self.dataset_counter[dataset.name] == 1:
             LOGGER.info(f"[{self._client}] dataset {dataset.name} enabled")
-            # Fix a better place for this call, it's sub-optimal
-            self.hass.async_create_task(self.async_request_refresh())
 
         LOGGER.debug(
             f"[{self._client}] dataset {dataset.name} ref_count incremented"

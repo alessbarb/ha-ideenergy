@@ -150,3 +150,17 @@ async def test_unchanged_data_does_not_notify_listeners(hass):
     client.login.assert_not_awaited()
     client.renew_session.assert_not_awaited()
     remove_listener()
+
+
+async def test_dataset_activation_does_not_schedule_implicit_refresh(hass):
+    client = make_client()
+    coordinator = make_coordinator(hass, client, make_state())
+    coordinator.async_request_refresh = AsyncMock()
+
+    coordinator.activate_dataset(IDeEnergyCoordinatorDataSet.DIRECT_READING)
+
+    assert (
+        coordinator.dataset_counter[IDeEnergyCoordinatorDataSet.DIRECT_READING.name]
+        == 1
+    )
+    coordinator.async_request_refresh.assert_not_called()
