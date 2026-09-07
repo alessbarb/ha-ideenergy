@@ -79,7 +79,7 @@ async def test_throttled_dataset_does_not_authenticate(hass):
     client.get_measure.assert_not_awaited()
 
 
-async def test_due_dataset_logs_in_only_for_real_request(hass):
+async def test_due_dataset_calls_client_once(hass):
     client = make_client(is_logged=False)
     client.get_measure.return_value = ideenergy.Measure(accumulate=123, instant=4.5)
     state = make_state()
@@ -88,7 +88,7 @@ async def test_due_dataset_logs_in_only_for_real_request(hass):
 
     data = await coordinator._async_update_data()
 
-    client.login.assert_awaited_once_with()
+    client.login.assert_not_awaited()
     client.renew_session.assert_not_awaited()
     client.get_measure.assert_awaited_once_with()
     assert data[IDeEnergyCoordinatorDataSet.DIRECT_READING] == {
@@ -98,24 +98,22 @@ async def test_due_dataset_logs_in_only_for_real_request(hass):
     assert DIRECT_READING_LAST_SUCCESS_STORED_STATE_KEY in state.data
 
 
-async def test_403_reauthenticates_once_and_retries_once(hass):
+async def test_403_is_not_retried_by_coordinator(hass):
     response = Mock(status=403, reason="Forbidden")
     client = make_client(is_logged=True)
-    client.get_measure.side_effect = [
-        ideenergy.RequestFailedError(response),
-        ideenergy.Measure(accumulate=321, instant=1.25),
-    ]
+    client.get_measure.side_effect = ideenergy.RequestFailedError(response)
     state = make_state()
     coordinator = make_coordinator(hass, client, state)
     coordinator.dataset_counter[IDeEnergyCoordinatorDataSet.DIRECT_READING.name] = 1
 
-    data = await coordinator._async_update_data()
+    with pytest.raises(UpdateFailed):
+        await coordinator._async_update_data()
 
-    client.login.assert_awaited_once_with()
-    assert client.get_measure.await_count == 2
-    assert (
-        data[IDeEnergyCoordinatorDataSet.DIRECT_READING][MEASURE_ACCUMULATED_KEY] == 321
-    )
+    client.login.assert_not_awaited()
+    client.renew_session.assert_not_awaited()
+    client.get_measure.assert_awaited_once_with()
+    assert DIRECT_READING_LAST_ATTEMPT_STORED_STATE_KEY in state.data
+    assert DIRECT_READING_LAST_SUCCESS_STORED_STATE_KEY not in state.data
 
 
 async def test_503_becomes_update_failed_and_records_attempt(hass):
