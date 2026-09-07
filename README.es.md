@@ -2,15 +2,15 @@
 
 <!-- Home Assistant badges -->
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs)
-[![hassfest validation](https://github.com/ldotlopez/ha-ideenergy/workflows/Validate%20with%20hassfest/badge.svg)](https://github.com/ldotlopez/ha-ideenergy/actions/workflows/hassfest.yml)
-[![HACS validation](https://github.com/ldotlopez/ha-ideenergy/workflows/Validate%20with%20HACS/badge.svg)](https://github.com/ldotlopez/ha-ideenergy/actions/workflows/hacs.yml)
+[![hassfest validation](https://github.com/alessbarb/ha-ideenergy/workflows/Validate%20with%20hassfest/badge.svg)](https://github.com/alessbarb/ha-ideenergy/actions/workflows/hassfest.yml)
+[![HACS validation](https://github.com/alessbarb/ha-ideenergy/workflows/Validate%20with%20HACS/badge.svg)](https://github.com/alessbarb/ha-ideenergy/actions/workflows/hacs.yml)
 
 <!-- Code and releases -->
-![GitHub Release (latest SemVer including pre-releases)](https://img.shields.io/github/v/release/ldotlopez/ha-ideenergy?include_prereleases)
-[![CodeQL](https://github.com/ldotlopez/ha-ideenergy/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/ldotlopez/ha-ideenergy/actions/workflows/codeql-analysis.yml)
+![GitHub Release (latest SemVer including pre-releases)](https://img.shields.io/github/v/release/alessbarb/ha-ideenergy?include_prereleases)
+[![CodeQL](https://github.com/alessbarb/ha-ideenergy/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/alessbarb/ha-ideenergy/actions/workflows/codeql-analysis.yml)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/ambv/black)
 
-Integración de [ideenergy](https://github.com/ldotlopez/ideenergy) para [Home Assistant](https://home-assistant.io/).
+Integración de [ideenergy](https://github.com/alessbarb/ideenergy) para [Home Assistant](https://home-assistant.io/).
 
 Esta integración proporciona datos energéticos para clientes de la distribuidora eléctrica española [i-DE](https://i-de.es).
 
@@ -19,6 +19,10 @@ La integración requiere un perfil de usuario **avanzado** en el área privada d
 > **La serie 3.x está en fase alpha.** Es una reescritura de la integración 2.x y utiliza las estadísticas de Home Assistant en lugar de manipular directamente la base de datos del recorder. Lee las [notas de actualización](UPGRADE-TO-3.x.md) antes de migrar una instalación existente.
 
 **Lee la [FAQ](FAQ.md) y las secciones Dependencias y Advertencias antes de instalar.**
+
+## Fork mantenido
+
+Este repositorio es un fork mantenido de [`ldotlopez/ha-ideenergy`](https://github.com/ldotlopez/ha-ideenergy). Se conservan la autoría original y la licencia GPL-3.0. Las incidencias, correcciones de compatibilidad y releases de este fork se gestionan en [`alessbarb/ha-ideenergy`](https://github.com/alessbarb/ha-ideenergy).
 
 ## Funcionalidades de 3.x
 
@@ -43,6 +47,12 @@ El coordinador se despierta periódicamente, pero solo consulta a i-DE cuando el
 
 Estos límites son intencionados. La API privada del punto de suministro de i-DE puede ser inestable y un exceso de solicitudes puede provocar bloqueos temporales de la cuenta.
 
+### Autenticación de dos factores
+
+i-DE puede exigir un código de verificación por SMS antes de permitir una sesión. La API web privada usada por esta integración no expone actualmente un flujo OTP documentado y estable que el cliente mantenido pueda implementar con seguridad, por lo que 3.x **no afirma disponer de soporte SMS/OTP nativo**.
+
+Las credenciales caducadas o una sesión rechazada de forma ordinaria pueden activar el flujo de reautenticación de Home Assistant. Un desafío SMS de i-DE es distinto: completa la verificación necesaria en la web o app oficial de i-DE. La integración no aumenta la frecuencia de peticiones para mantener artificialmente viva una sesión posterior al 2FA, porque un exceso de acceso automatizado puede provocar bloqueos. Consulta la [FAQ](FAQ.md) para más detalles.
+
 ### No disponible actualmente en 3.x
 
 El código 3.x recibe un valor instantáneo junto con algunas lecturas directas del contador, pero **no expone actualmente una entidad separada de Consumo instantáneo**. La documentación antigua de 2.x que describía un sensor instantáneo o una actualización horaria entre los minutos 50 y 59 ya no corresponde con la implementación actual.
@@ -53,14 +63,14 @@ Necesitas un usuario de i-DE con acceso al área privada. Puedes registrarte des
 
 También necesitas el perfil de **Usuario avanzado**. Si tu cuenta no lo tiene, debes solicitarlo desde el perfil del área privada de i-DE.
 
-La integración depende del cliente Python independiente [`ideenergy`](https://github.com/ldotlopez/ideenergy) y de [`homeassistant-historical-sensor`](https://github.com/ldotlopez/ha-historical-sensor).
+La integración fija el cliente mantenido [`alessbarb/ideenergy`](https://github.com/alessbarb/ideenergy) a un commit Git inmutable y también depende de [`homeassistant-historical-sensor`](https://github.com/ldotlopez/ha-historical-sensor).
 
 ## Instalación
 
 ### Repositorio personalizado de HACS
 
 1. Abre HACS en Home Assistant.
-2. Añade `https://github.com/ldotlopez/ha-ideenergy` como **Repositorio personalizado**, categoría **Integración**.
+2. Añade `https://github.com/alessbarb/ha-ideenergy` como **Repositorio personalizado**, categoría **Integración**.
 3. Descarga la versión deseada.
 4. Reinicia Home Assistant.
 5. Ve a **Ajustes → Dispositivos y servicios → Añadir integración** y selecciona **i-DE Energy Monitor**.
@@ -95,6 +105,7 @@ Para monitorizar varios puntos de suministro, crea una entrada de configuración
 
 - La serie 3.x sigue siendo software alpha y puede cambiar entre versiones preliminares.
 - i-DE no ofrece un contrato de API público para esta integración. Los cambios en su web o endpoints privados pueden romper la autenticación o la obtención de datos sin previo aviso.
+- i-DE puede exigir autenticación de dos factores por SMS. El manejo nativo del desafío OTP no está implementado actualmente.
 - Las lecturas directas del contador son sensiblemente menos fiables que los datos históricos. No construyas automatizaciones críticas o de seguridad que dependan de ellas.
 - Sé conservador con las lecturas directas cuando tengas varios contratos configurados. Un exceso de peticiones puede provocar bloqueos temporales por parte de i-DE.
 - Los datos históricos llegan con retraso desde i-DE, normalmente de unas 24 a 48 horas.
