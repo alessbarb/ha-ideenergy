@@ -43,6 +43,12 @@ The coordinator itself wakes periodically, but remote i-DE datasets are fetched 
 
 These limits are intentional. The i-DE service-point API is unreliable and excessive requests can result in temporary account blocking.
 
+### Two-factor authentication
+
+i-DE can require an SMS verification code before allowing a session. The private web API used by this integration does not currently expose a documented, stable OTP challenge flow that the maintained client can safely implement, so 3.x does **not** claim native SMS/OTP support.
+
+Ordinary expired credentials or rejected sessions can enter Home Assistant's re-authentication lifecycle. An i-DE SMS challenge is different: complete the required verification through i-DE's own website or app. The integration deliberately does not increase background request frequency merely to keep a post-2FA session alive, because i-DE can block accounts for excessive automated access. See the [FAQ](FAQ.md) for details.
+
 ### Not currently exposed in 3.x
 
 The 3.x code can receive an instantaneous value together with a direct meter reading, but it does **not** currently expose a separate Instant Consumption entity. Documentation from the 2.x series that referred to an instant sensor or to an hourly minute-50-to-59 update window does not describe the current 3.x implementation.
@@ -95,6 +101,7 @@ To monitor more than one service point, add one config entry per contract.
 
 - The 3.x series is still alpha software and can change between prereleases.
 - i-DE does not provide a public API contract for this integration. Changes to its website/private endpoints can break authentication or data retrieval without notice.
+- i-DE may require SMS two-factor authentication. Native OTP challenge handling is not currently implemented.
 - Direct meter readings are notably less reliable than historical data. Do not build safety-critical or unattended control logic around them.
 - Be conservative with direct-reading sensors when several contracts are configured. Excessive service-point requests can trigger temporary blocking by i-DE.
 - Historical data is delayed by i-DE, commonly by roughly 24 to 48 hours.
