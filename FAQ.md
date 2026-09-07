@@ -6,6 +6,14 @@ The 3.x line is alpha software and is also a rewrite of the 2.x integration. If 
 
 In particular, 3.x currently exposes an **Accumulated Consumption** direct-reading sensor but does not expose a separate **Instant Consumption** entity.
 
+## What happens when i-DE requires SMS two-factor authentication?
+
+i-DE can require an SMS second factor before allowing a session. The private web API used by this integration does not currently have a documented, stable OTP challenge flow that the maintained client can safely implement, so the integration does **not** claim native SMS/OTP support.
+
+An ordinary expired or rejected session is handled through Home Assistant's authentication/re-authentication lifecycle. That is different from an i-DE SMS challenge: if i-DE requires a verification code, complete the authentication through i-DE's own website or app.
+
+The integration deliberately does not keep sessions alive with frequent background calls or re-login aggressively just to avoid 2FA. i-DE can temporarily block accounts that generate excessive automated traffic, so bypassing the challenge by increasing request frequency would conflict with the project's conservative request policy.
+
 ## Why is the Accumulated Consumption sensor unknown or not changing?
 
 The accumulated sensor reads the physical service point through i-DE. That endpoint is significantly less reliable than the historical endpoints and individual requests can fail or take a long time.
@@ -24,7 +32,7 @@ The old 2.x documentation describing a minute-50-to-59 hourly window and several
 
 ## Why can accumulated consumption appear unchanged?
 
-The direct meter reading reports accumulated energy with limited precision. If the meter has not advanced enough to change the returned accumulated value, Home Assistant will continue to show the previous value until a later successful reading reflects the increase.
+The direct meter reading reports the accumulated energy value supplied by i-DE. Small consumption changes can remain visually unchanged until a later successful reading, depending on the precision and update cadence of the service-point endpoint.
 
 ## Why do Historical Consumption or Historical Generation not show a normal current state?
 
