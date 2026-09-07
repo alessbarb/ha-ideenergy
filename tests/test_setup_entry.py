@@ -10,7 +10,7 @@ from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.ideenergy import async_setup_entry
+from custom_components.ideenergy import async_setup_entry, get_i_de_energy_api
 from custom_components.ideenergy.const import CONF_CONTRACT, DOMAIN
 
 pytestmark = pytest.mark.asyncio
@@ -36,6 +36,33 @@ def make_contract_details():
         "cups": CUPS,
         "listContador": [{"tipMarca": "TEST"}],
     }
+
+
+def test_api_clients_use_private_http_sessions(hass, monkeypatch):
+    """Each config entry must have its own cookie-bearing HTTP session."""
+    entry_a = make_entry(unique_id=CUPS)
+    entry_b = make_entry(unique_id="ES0000000000000000CD")
+    session_a = object()
+    session_b = object()
+    session_factory = Mock(side_effect=[session_a, session_b])
+
+    def client_factory(**kwargs):
+        return SimpleNamespace(session=kwargs["session"])
+
+    monkeypatch.delenv("HASS_I_DE_MOCK", raising=False)
+    monkeypatch.setattr(
+        "custom_components.ideenergy.async_create_clientsession",
+        session_factory,
+    )
+    monkeypatch.setattr("custom_components.ideenergy.ideenergy.Client", client_factory)
+
+    client_a = get_i_de_energy_api(hass, entry_a)
+    client_b = get_i_de_energy_api(hass, entry_b)
+
+    assert client_a.session is session_a
+    assert client_b.session is session_b
+    assert client_a.session is not client_b.session
+    assert session_factory.call_count == 2
 
 
 async def test_setup_rejected_credentials_raise_auth_failed(hass, monkeypatch):
