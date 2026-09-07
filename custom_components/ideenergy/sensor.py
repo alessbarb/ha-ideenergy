@@ -36,11 +36,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import slugify
-from homeassistant_historical_sensor import (
-    HistoricalSensor,
-    HistoricalState,
-    hass_get_last_statistic,
-)
+from homeassistant_historical_sensor import HistoricalSensor, HistoricalState
 
 from .coordinator import (
     MEASURE_ACCUMULATED_KEY,
@@ -170,8 +166,6 @@ class IDeEnergySensor(CoordinatorEntity, HistoricalSensor, SensorEntity):
                 block = block - 1
 
             return block * secs_per_hour
-
-        latest = await hass_get_last_statistic(self.hass, self.get_statistic_metadata())
 
         #
         # Get last sum sum from latest
