@@ -65,6 +65,13 @@ MEASURE_INSTANT_KEY = "measure_instant"
 HISTORICAL_PERIOD_LENGHT = timedelta(days=7)
 
 
+def _as_local_datetime(dt: datetime) -> datetime:
+    """Interpret legacy naive values locally while preserving aware timestamps."""
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=LOCAL_TZ)
+    return dt.astimezone(LOCAL_TZ)
+
+
 ##
 # IDeEnergyCoordinatorDataSet: types of data that can be registered in the
 # coordinator to be fetched
@@ -237,7 +244,7 @@ class IDeEnergyDataCoordinator(DataUpdateCoordinator[IDeEnergyDataCoordinatorDat
         def historical_power_demand_as_historical_state(
             dai: ideenergy.DemandAtInstant,
         ) -> HistoricalState | None:
-            dt = dai.dt.replace(tzinfo=LOCAL_TZ)
+            dt = _as_local_datetime(dai.dt)
             # last_reset = dai.start.replace(tzinfo=LOCAL_TZ)
 
             try:
@@ -294,8 +301,8 @@ class IDeEnergyDataCoordinator(DataUpdateCoordinator[IDeEnergyDataCoordinatorDat
         def as_historical_state(
             pv: ideenergy.PeriodValue,
         ) -> HistoricalState | None:
-            dt = pv.end.replace(tzinfo=LOCAL_TZ)
-            last_reset = pv.start.replace(tzinfo=LOCAL_TZ)
+            dt = _as_local_datetime(pv.end)
+            last_reset = _as_local_datetime(pv.start)
 
             try:
                 return HistoricalState(
