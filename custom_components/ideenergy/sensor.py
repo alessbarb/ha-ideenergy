@@ -84,7 +84,7 @@ class IDeEnergySensor(CoordinatorEntity, HistoricalSensor, SensorEntity):
     # Entity
     # ==
     async def async_added_to_hass(self) -> None:
-        LOGGER.info(f"{self.entity_id} added to hass")
+        LOGGER.info("%s added to Home Assistant", self.I_DE_ENTITY_NAME)
         await super().async_added_to_hass()
 
         for x in self.I_DE_DATA_SET:
@@ -93,7 +93,7 @@ class IDeEnergySensor(CoordinatorEntity, HistoricalSensor, SensorEntity):
         # await self.async_update_historical()
         await self.coordinator.async_request_refresh()
         # await self.async_write_historical()
-        LOGGER.info(f"{self.entity_id} updated historical")
+        LOGGER.info("%s historical data refreshed", self.I_DE_ENTITY_NAME)
 
     async def async_will_remove_from_hass(self) -> None:
         for x in self.I_DE_DATA_SET:
@@ -143,8 +143,8 @@ class IDeEnergySensor(CoordinatorEntity, HistoricalSensor, SensorEntity):
         hist_states = [x for x in hist_states if x.state is not None]
         if len(hist_states) != n_original_hist_states:
             LOGGER.warning(
-                f"{self.entity_id}: "
-                + "found some weird values in historical statistics"
+                "%s: found invalid values in historical statistics",
+                self.I_DE_ENTITY_NAME,
             )
 
         # itertools.groupby only combines adjacent values. Explicit sorting
@@ -176,19 +176,12 @@ class IDeEnergySensor(CoordinatorEntity, HistoricalSensor, SensorEntity):
         try:
             total_accumulated = extract_last_sum(latest)
         except KeyError, TypeError, ValueError:
-            LOGGER.error(
-                f"{self.entity_id}: [bug] statistics broken (latest={latest!r})"
-            )
+            LOGGER.error("%s: statistics state is invalid", self.I_DE_ENTITY_NAME)
             return []
 
-        start_point_local_dt = dt_util.as_local(
-            dt_util.utc_from_timestamp(latest.get("start", 0) if latest else 0)
-        )
-
         LOGGER.debug(
-            f"{self.entity_id}: "
-            + f"calculating statistics using {total_accumulated:.2f} as base accumulated "
-            + f"(registered at {start_point_local_dt})"
+            "%s: calculating historical statistics from existing recorder state",
+            self.I_DE_ENTITY_NAME,
         )
 
         #
@@ -256,22 +249,22 @@ class AccumulatedConsumption(RestoreSensor, CoordinatorEntity, SensorEntity):
     # Entity
     # ==
     async def async_added_to_hass(self) -> None:
-        LOGGER.info(f"{self.entity_id} added to hass")
+        LOGGER.info("%s added to Home Assistant", self.I_DE_ENTITY_NAME)
         await super().async_added_to_hass()
 
         for x in self.I_DE_DATA_SET:
             self.coordinator.activate_dataset(x)
 
         await self.coordinator.async_request_refresh()
-        LOGGER.info(f"{self.entity_id} updated historical")
+        LOGGER.info("%s historical data refreshed", self.I_DE_ENTITY_NAME)
 
         prev = await self.async_get_last_sensor_data()
-        LOGGER.debug(f"{self.entity_id} last sensor data: {prev!r}")
+        LOGGER.debug("%s restored-state lookup completed", self.I_DE_ENTITY_NAME)
         if prev is not None and prev.native_value is not None:
             self._attr_native_value = prev.native_value
-            LOGGER.debug(f"{self.entity_id} restored previous value of {self.state}")
+            LOGGER.debug("%s restored previous state", self.I_DE_ENTITY_NAME)
         else:
-            LOGGER.debug(f"{self.entity_id} no previous sensor data to restore")
+            LOGGER.debug("%s has no previous state to restore", self.I_DE_ENTITY_NAME)
 
     async def async_will_remove_from_hass(self) -> None:
         for x in self.I_DE_DATA_SET:

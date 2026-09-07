@@ -98,7 +98,7 @@ class IDeEnergyDataCoordinator(DataUpdateCoordinator[IDeEnergyDataCoordinatorDat
         config_entry_state: IDeEnergyConfigEntryState,
         update_interval: timedelta = UPDATE_INTERVAL,
     ):
-        name = f"{client} coordinator" if client else "i-de coordinator"
+        name = "i-DE coordinator"
         super().__init__(
             hass,
             LOGGER,
@@ -117,10 +117,10 @@ class IDeEnergyDataCoordinator(DataUpdateCoordinator[IDeEnergyDataCoordinatorDat
     def activate_dataset(self, dataset: IDeEnergyCoordinatorDataSet) -> None:
         self.dataset_counter[dataset.name] += 1
         if self.dataset_counter[dataset.name] == 1:
-            LOGGER.info(f"[{self._client}] dataset {dataset.name} enabled")
+            LOGGER.info(f"i-DE: dataset {dataset.name} enabled")
 
         LOGGER.debug(
-            f"[{self._client}] dataset {dataset.name} ref_count incremented"
+            f"i-DE: dataset {dataset.name} ref_count incremented"
             + f" (count={self.dataset_counter[dataset.name]})"
         )
 
@@ -129,11 +129,11 @@ class IDeEnergyDataCoordinator(DataUpdateCoordinator[IDeEnergyDataCoordinatorDat
             self.dataset_counter[dataset.name] -= 1
 
         LOGGER.debug(
-            f"[{self._client}] dataset {dataset.name} ref_count decremented"
+            f"i-DE: dataset {dataset.name} ref_count decremented"
             + f" (count={self.dataset_counter[dataset.name]})"
         )
         if self.dataset_counter[dataset.name] == 0:
-            LOGGER.info(f"[{self._client}] dataset {dataset.name} disabled")
+            LOGGER.info(f"i-DE: dataset {dataset.name} disabled")
 
     async def _async_setup(self) -> None:
         """Set up the coordinator.
@@ -149,7 +149,7 @@ class IDeEnergyDataCoordinator(DataUpdateCoordinator[IDeEnergyDataCoordinatorDat
         """Fetch data from API endpoints only when a dataset is due."""
         active_datasets = [k for k, v in self.dataset_counter.items() if v > 0]
         dsstr = ", ".join(active_datasets)
-        LOGGER.debug(f"[{self._client}] datasets enabled: {dsstr}")
+        LOGGER.debug(f"i-DE: datasets enabled: {dsstr}")
 
         updated_data = {}
         fns = {
@@ -169,9 +169,9 @@ class IDeEnergyDataCoordinator(DataUpdateCoordinator[IDeEnergyDataCoordinatorDat
                 raise UpdateFailed(f"Error updating i-DE dataset {ds.name}") from exc
 
             if updated_data[ds] is None:
-                LOGGER.debug(f"[{self._client}] {ds.name}: dataset was not refreshed")
+                LOGGER.debug(f"i-DE: {ds.name}: dataset was not refreshed")
             else:
-                LOGGER.info(f"[{self._client}] {ds.name}: dataset updated")
+                LOGGER.info(f"i-DE: {ds.name}: dataset updated")
 
         return self.data | {k: v for k, v in updated_data.items() if v is not None}
 
@@ -259,7 +259,7 @@ class IDeEnergyDataCoordinator(DataUpdateCoordinator[IDeEnergyDataCoordinatorDat
                     # attributes={"last_reset": last_reset},
                 )
             except Exception:
-                LOGGER.exception(f"[{self._client}] invalid DemandAtInstant '{dai!r}'")
+                LOGGER.exception("i-DE: invalid demand-at-instant payload")
                 return None
 
         data = await self._async_call_client(self._client.get_historical_power_demand)
@@ -316,7 +316,7 @@ class IDeEnergyDataCoordinator(DataUpdateCoordinator[IDeEnergyDataCoordinatorDat
                     attributes={"last_reset": last_reset},
                 )
             except Exception:
-                LOGGER.error(f"[{self._client}] invalid PeriodValue '{pv!r}'")
+                LOGGER.error("i-DE: invalid historical period payload")
                 return None
 
         hist_states = [as_historical_state(pv) for pv in data.periods]
@@ -365,7 +365,7 @@ class IDeEnergyDataCoordinator(DataUpdateCoordinator[IDeEnergyDataCoordinatorDat
         try:
             prev_ts = float(self._config_entry_state.data[key])
         except TypeError, ValueError, KeyError:
-            LOGGER.debug(f"[{self._client}] {label}: no previous timestamp found")
+            LOGGER.debug(f"i-DE: {label}: no previous timestamp found")
             return False
 
         elapsed_seconds = now_ts - prev_ts
@@ -373,7 +373,7 @@ class IDeEnergyDataCoordinator(DataUpdateCoordinator[IDeEnergyDataCoordinatorDat
             prev_dt = dt_util.as_local(dt_util.utc_from_timestamp(prev_ts))
             skew_seconds = abs(elapsed_seconds)
             LOGGER.warning(
-                f"[{self._client}] {label}: stored timestamp is in the future "
+                f"i-DE: {label}: stored timestamp is in the future "
                 + f"(key={key!r}, now={now_dt}, prev={prev_dt}); "
                 + f"clock skew: {skew_seconds:.0f}s; allowing refresh"
             )
@@ -387,7 +387,7 @@ class IDeEnergyDataCoordinator(DataUpdateCoordinator[IDeEnergyDataCoordinatorDat
             remaining_seconds = max_age_seconds - elapsed_seconds
 
             LOGGER.debug(
-                f"[{self._client}] {label}: too recent - "
+                f"i-DE: {label}: too recent - "
                 f"last check: {prev_dt}, "
                 f"required interval: {max_age_seconds:.0f}s, "
                 f"remaining time: {remaining_seconds:.0f}s "
