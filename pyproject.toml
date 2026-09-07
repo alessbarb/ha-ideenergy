@@ -25,6 +25,9 @@ profile = "black"
 [tool.mypy]
 files = ["custom_components/ideenergy"]
 
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
 [tool.pyupgrade]
 addopts = "--py314-plus"
 
