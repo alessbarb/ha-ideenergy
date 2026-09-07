@@ -23,7 +23,7 @@ from homeassistant.config_entries import ConfigEntry, ConfigEntryNotReady
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.aiohttp_client import async_create_clientsession
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.loader import async_get_loaded_integration
 
@@ -103,7 +103,7 @@ def get_i_de_energy_api(hass: HomeAssistant, entry: ConfigEntry):
         client_cls = ideenergy.Client
 
     return client_cls(
-        session=async_get_clientsession(hass),
+        session=async_create_clientsession(hass),
         username=entry.data[CONF_USERNAME],
         password=entry.data[CONF_PASSWORD],
         contract=entry.data[CONF_CONTRACT],
