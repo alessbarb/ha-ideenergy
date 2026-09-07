@@ -62,7 +62,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install \
             "pytest-homeassistant-custom-component==${{ matrix.pytest_homeassistant }}" \
-            "ideenergy>=2.0.1.dev3" \
+            "ideenergy@git+https://github.com/alessbarb/ideenergy.git@c16442d36a5b59f6d3f895ebdd722654bf54fcf1" \
             "homeassistant-historical-sensor==3.0.0a4"
 
       - name: Verify Home Assistant version
