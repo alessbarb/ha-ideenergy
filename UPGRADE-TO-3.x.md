@@ -1,75 +1,86 @@
-## Step 1: Integration Removal and Data Cleanup
-Before cleaning up the database, the integration must be fully removed from the Home Assistant core to prevent it from re-creating entities.
+# Upgrading from i-DE Energy Monitor 2.x to 3.x
 
-1.  **Delete Old Integration:** Navigate to **Settings > Devices & Services**, locate the integration, and select **Delete**.
-2.  **Restart Home Assistant:** Perform a full restart (**Developer Tools > YAML > Restart**) to ensure all entities are purged from the current state.
-3.  **Navigate to Statistics:** Go to **Developer Tools > Statistics**.
-4.  **Search for Sensors:** Type `sensor.es` into the search filter.
-5.  **Clean Statistics:** **Delete** all associated statistics entries **except** for those labeled as "Historical Consumption." Keeping these is vital for preserving your long-term energy data.
+The 3.x series changes how historical energy data is represented. It uses Home Assistant statistics instead of writing directly to recorder internals. Treat the upgrade as a migration, not as an in-place database rewrite.
 
----
+## Before upgrading
 
-## Step 2: Service Shutdown and File Removal
-To prevent file-in-use errors and data corruption, stop the core service.
+1. Create a **full Home Assistant backup** and make sure it completes successfully.
+2. Record which i-DE entities or statistics are currently selected in the Energy Dashboard.
+3. If automations depend on the old instant-consumption entity, disable or update them before migrating. The current 3.x series does not expose a separate Instant Consumption entity.
+4. Do **not** delete recorder statistics merely to prepare the upgrade. Keeping the old statistics is safer than trying to reconstruct them later.
 
-1.  **Stop Home Assistant.**
-2.  Access your configuration folder (via SSH or Samba) and delete the following:
-    * `config/custom_components/ideenergy`
-    * Any files matching `config/.storage/ideenergy_*`
-3.  **Manual Registry Cleanup:** Open `.storage/core.entity_registry` and `.storage/core.device_registry`. Carefully remove any JSON blocks referencing `sensor.es12345...`.
+## Supported migration path
 
----
+### 1. Install the 3.x release
 
-## Step 3: Database Migration (SQLite)
-You must manually rename the historical metadata to match the new schema requirements (`sensor:es..._historical_consumption`).
+Upgrade the custom integration through HACS, or replace `custom_components/ideenergy` with the files from the desired 3.x release, then restart Home Assistant.
 
-**Note the new schema is using ':' instead of '.' and it should end with `_historical_consumption` **
+### 2. Recreate the config entry only if necessary
 
-1.  Open your `home-assistant_v2.db` using an SQLite client.
-2.  **Identify the metadata ID:**
-    ```sql
-    SELECT * FROM statistics_meta WHERE statistic_id LIKE 'sensor.es%';
-    ```
-You should get something like this:
-```
-sqlite> select * from statistics_meta where statistic_id  like 'sensor.es%';
-42|sensor.es1234567890123456xy_accumulated|recorder|kWh||1||0|energy
-113|sensor.es1234567890123456xy_instant_power_demand|recorder|W||0||1|power
-143|sensor.es1234567890123456xy_historical|recorder|kWh|0|1|Historical Consumption Statistics|0|energy
-```
+If the existing 2.x config entry cannot be loaded by 3.x:
 
-In the example, the row 143 is the one we are looking for.
+1. Remove the **i-DE integration config entry** from **Settings → Devices & services**.
+2. Restart Home Assistant.
+3. Add **i-DE Energy Monitor** again through the UI.
+4. Select the same contract/service point.
 
-3.  **Update the record:** Use the ID found in the previous step (e.g., `143`) to update the metadata:
-    ```sql
-    UPDATE statistics_meta
-    SET
-        statistic_id = 'sensor:es1234567890123456xy_historical_consumption',
-        name = 'ES1234567890123456XY Historical Consumption',
-        source = 'sensor',
-        unit_class = 'energy'
-    WHERE id = 143;
-    ```
+Removing the config entry is not the same as deleting recorder statistics. Do not manually edit `.storage/core.entity_registry`, `.storage/core.device_registry`, or other Home Assistant storage files as part of the normal migration.
 
----
+### 3. Let 3.x create its current entities and statistics
 
-## Step 4: Staged Installation
-1.  **Start Home Assistant.**
-2.  Verify the renamed statistic is visible and correctly formatted.
-3.  **Note the date** of the last registered month in your energy dashboard.
-4.  **Stop Home Assistant** again.
+The current 3.x series exposes:
 
----
+- accumulated consumption from direct meter readings;
+- historical consumption statistics;
+- historical generation statistics, disabled by default.
 
-## Step 5: Install Version 3.0.0 Alpha
-1.  Copy the new `3.0.0 alpha` files into `config/custom_components/ideenergy`.
-2.  **Calculate the Data Gap:** Determine the number of days between your last registered consumption and today.
-3.  **Modify the Coordinator:** Open `custom_components/ideenergy/coordinator.py`.
-4.  Find the variable `HISTORICAL_PERIOD_LENGHT` and update it to match the number of days needed to fill the gap.
+It does not currently expose a separate instant-consumption entity.
 
----
+### 4. Allow the normal historical window to populate
 
-## Step 6: Final Configuration
-1.  **Start Home Assistant.**
-2.  Add the integration via the UI and complete the configuration flow.
-3.  Confirm that the energy consumption gap has been successfully backfilled in the Energy Dashboard.
+The coordinator requests a bounded recent history window automatically. Do not edit `HISTORICAL_PERIOD_LENGHT` in the integration source to force a larger backfill.
+
+If older historical data is missing after migration, keep the existing 2.x statistics as an archive rather than increasing API traffic aggressively. i-DE can reject or temporarily block excessive requests.
+
+### 5. Reconfigure the Energy Dashboard
+
+After the new 3.x statistics are available:
+
+1. Open **Settings → Dashboards → Energy**.
+2. Select the new 3.x consumption statistic where appropriate.
+3. Verify the first complete day before relying on totals or comparisons.
+4. Keep the previous 2.x statistic until you are satisfied that the new series is correct.
+
+## Historical continuity
+
+There is currently no supported automatic migration that merges an arbitrary 2.x recorder statistic into the 3.x statistic identifier.
+
+For most users, the safest choice is:
+
+- keep the old 2.x statistic for historical reference;
+- start the 3.x statistic from the migration date;
+- avoid direct database manipulation.
+
+If uninterrupted historical continuity is mandatory, treat it as a separate advanced database-maintenance operation. Work only from a verified backup, stop Home Assistant before modifying the database, and use procedures appropriate for the actual recorder backend. Direct SQL against `statistics_meta` is **not** part of the supported integration upgrade path.
+
+## Do not do these during a normal upgrade
+
+- Do not manually remove JSON blocks from Home Assistant `.storage` files.
+- Do not run ad-hoc `UPDATE statistics_meta ...` statements against the live recorder database.
+- Do not modify coordinator source constants to request a large historical gap.
+- Do not repeatedly reload the integration to force i-DE requests.
+
+These actions can corrupt Home Assistant state or increase the chance of i-DE temporarily blocking the account.
+
+## After the upgrade
+
+Confirm that:
+
+- the integration loads without setup errors;
+- the configured CUPS/service point is the expected one;
+- accumulated consumption updates when a direct reading is successfully available;
+- historical consumption appears in Home Assistant statistics;
+- the Energy Dashboard uses the intended 3.x statistic;
+- automations do not reference the removed 2.x instant-consumption entity.
+
+The 3.x line remains alpha software. Keep a recent Home Assistant backup while evaluating upgrades between prereleases.
