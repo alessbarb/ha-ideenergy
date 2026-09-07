@@ -134,3 +134,19 @@ async def test_503_becomes_update_failed_and_records_attempt(hass):
     client.get_measure.assert_awaited_once_with()
     assert DIRECT_READING_LAST_ATTEMPT_STORED_STATE_KEY in state.data
     assert DIRECT_READING_LAST_SUCCESS_STORED_STATE_KEY not in state.data
+
+
+async def test_unchanged_data_does_not_notify_listeners(hass):
+    client = make_client()
+    coordinator = make_coordinator(hass, client, make_state())
+    listener = Mock()
+    remove_listener = coordinator.async_add_listener(listener)
+
+    await coordinator.async_refresh()
+    listener.reset_mock()
+    await coordinator.async_refresh()
+
+    listener.assert_not_called()
+    client.login.assert_not_awaited()
+    client.renew_session.assert_not_awaited()
+    remove_listener()

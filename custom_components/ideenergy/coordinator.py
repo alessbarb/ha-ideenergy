@@ -92,7 +92,13 @@ class IDeEnergyDataCoordinator(DataUpdateCoordinator[IDeEnergyDataCoordinatorDat
         update_interval: timedelta = UPDATE_INTERVAL,
     ):
         name = f"{client} coordinator" if client else "i-de coordinator"
-        super().__init__(hass, LOGGER, name=name, update_interval=update_interval)
+        super().__init__(
+            hass,
+            LOGGER,
+            name=name,
+            update_interval=update_interval,
+            always_update=False,
+        )
 
         # Use dataset names as keys so all counter accesses are consistent.
         self.dataset_counter = {ds.name: 0 for ds in IDeEnergyCoordinatorDataSet}
