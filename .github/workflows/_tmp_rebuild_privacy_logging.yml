@@ -1,0 +1,90 @@
+name: Temporary rebuild privacy logging
+
+on:
+  push:
+    branches:
+      - fix/privacy-safe-logging
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/privacy-safe-logging
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Apply privacy-only changes to current main
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(text: str, old: str, new: str, label: str) -> str:
+              if text.count(old) != 1:
+                  raise SystemExit(f"unexpected {label}: found {text.count(old)} occurrences")
+              return text.replace(old, new)
+
+          coordinator = Path("custom_components/ideenergy/coordinator.py")
+          text = coordinator.read_text()
+          replacements = [
+              ('        name = f"{client} coordinator" if client else "i-de coordinator"\n', '        name = "i-DE coordinator"\n', "coordinator name"),
+              ('            LOGGER.info(f"[{self._client}] dataset {dataset.name} enabled")\n', '            LOGGER.info(f"i-DE: dataset {dataset.name} enabled")\n', "dataset enabled log"),
+              ('            f"[{self._client}] dataset {dataset.name} ref_count incremented"\n', '            f"i-DE: dataset {dataset.name} ref_count incremented"\n', "ref increment log"),
+              ('            f"[{self._client}] dataset {dataset.name} ref_count decremented"\n', '            f"i-DE: dataset {dataset.name} ref_count decremented"\n', "ref decrement log"),
+              ('            LOGGER.info(f"[{self._client}] dataset {dataset.name} disabled")\n', '            LOGGER.info(f"i-DE: dataset {dataset.name} disabled")\n', "dataset disabled log"),
+              ('        LOGGER.debug(f"[{self._client}] datasets enabled: {dsstr}")\n', '        LOGGER.debug(f"i-DE: datasets enabled: {dsstr}")\n', "datasets enabled log"),
+              ('                LOGGER.debug(f"[{self._client}] {ds.name}: dataset was not refreshed")\n', '                LOGGER.debug(f"i-DE: {ds.name}: dataset was not refreshed")\n', "not refreshed log"),
+              ('                LOGGER.info(f"[{self._client}] {ds.name}: dataset updated")\n', '                LOGGER.info(f"i-DE: {ds.name}: dataset updated")\n', "dataset updated log"),
+              ('                LOGGER.exception(f"[{self._client}] invalid DemandAtInstant \'{dai!r}\'")\n', '                LOGGER.exception("i-DE: invalid demand-at-instant payload")\n', "demand payload log"),
+              ('                LOGGER.error(f"[{self._client}] invalid PeriodValue \'{pv!r}\'")\n', '                LOGGER.error("i-DE: invalid historical period payload")\n', "period payload log"),
+              ('            LOGGER.debug(f"[{self._client}] {label}: no previous timestamp found")\n', '            LOGGER.debug(f"i-DE: {label}: no previous timestamp found")\n', "missing timestamp log"),
+              ('                f"[{self._client}] {label}: stored timestamp is in the future "\n', '                f"i-DE: {label}: stored timestamp is in the future "\n', "future timestamp log"),
+              ('                f"[{self._client}] {label}: too recent - "\n', '                f"i-DE: {label}: too recent - "\n', "too recent log"),
+          ]
+          for old, new, label in replacements:
+              text = replace_once(text, old, new, label)
+          coordinator.write_text(text)
+
+          sensor = Path("custom_components/ideenergy/sensor.py")
+          text = sensor.read_text()
+          replacements = [
+              ('        LOGGER.info(f"{self.entity_id} added to hass")\n', '        LOGGER.info("%s added to Home Assistant", self.I_DE_ENTITY_NAME)\n', "sensor added log 1"),
+              ('        LOGGER.info(f"{self.entity_id} updated historical")\n', '        LOGGER.info("%s historical data refreshed", self.I_DE_ENTITY_NAME)\n', "historical refreshed log 1"),
+              ('            LOGGER.warning(\n                f"{self.entity_id}: "\n                + "found some weird values in historical statistics"\n            )\n', '            LOGGER.warning(\n                "%s: found invalid values in historical statistics",\n                self.I_DE_ENTITY_NAME,\n            )\n', "invalid statistic log"),
+              ('            LOGGER.error(\n                f"{self.entity_id}: [bug] statistics broken (latest={latest!r})"\n            )\n', '            LOGGER.error("%s: statistics state is invalid", self.I_DE_ENTITY_NAME)\n', "broken statistics log"),
+              ('        start_point_local_dt = dt_util.as_local(\n            dt_util.utc_from_timestamp(latest.get("start", 0) if latest else 0)\n        )\n\n        LOGGER.debug(\n            f"{self.entity_id}: "\n            + f"calculating statistics using {total_accumulated:.2f} as base accumulated "\n            + f"(registered at {start_point_local_dt})"\n        )\n', '        LOGGER.debug(\n            "%s: calculating historical statistics from existing recorder state",\n            self.I_DE_ENTITY_NAME,\n        )\n', "statistics base log"),
+              ('        LOGGER.debug(f"{self.entity_id} last sensor data: {prev!r}")\n', '        LOGGER.debug("%s restored-state lookup completed", self.I_DE_ENTITY_NAME)\n', "restore lookup log"),
+              ('            LOGGER.debug(f"{self.entity_id} restored previous value of {self.state}")\n', '            LOGGER.debug("%s restored previous state", self.I_DE_ENTITY_NAME)\n', "restore value log"),
+              ('            LOGGER.debug(f"{self.entity_id} no previous sensor data to restore")\n', '            LOGGER.debug("%s has no previous state to restore", self.I_DE_ENTITY_NAME)\n', "no restore log"),
+          ]
+          # The two added/refreshed messages occur once per sensor class.
+          for old, new, label in replacements[:2]:
+              if text.count(old) != 2:
+                  raise SystemExit(f"unexpected {label}: found {text.count(old)} occurrences")
+              text = text.replace(old, new)
+          for old, new, label in replacements[2:]:
+              text = replace_once(text, old, new, label)
+          sensor.write_text(text)
+
+          privacy_test = Path("tests/test_privacy_logging.py")
+          privacy_test.write_text('''"""Tests for privacy-safe integration logging."""\n\nimport logging\nfrom datetime import timedelta\nfrom types import SimpleNamespace\nfrom unittest.mock import AsyncMock\n\nimport pytest\n\nfrom custom_components.ideenergy import coordinator, sensor\n\npytestmark = pytest.mark.asyncio\n\nSECRET_ACCOUNT = "private-user@example.com/private-contract-123"\nSECRET_CUPS = "sensor.es123456789012345678_historical_consumption"\nSECRET_ENERGY = 987654.321\n\n\nclass SensitiveClient:\n    """Client double whose string representation contains account identifiers."""\n\n    is_logged = True\n\n    def __str__(self) -> str:\n        return SECRET_ACCOUNT\n\n\ndef make_state():\n    return SimpleNamespace(data={}, async_save=AsyncMock())\n\n\nasync def test_coordinator_logs_do_not_render_client_identity(hass, caplog):\n    caplog.set_level(logging.DEBUG, logger="custom_components.ideenergy.coordinator")\n    instance = coordinator.IDeEnergyDataCoordinator(\n        hass=hass,\n        client=SensitiveClient(),\n        config_entry_state=make_state(),\n    )\n\n    instance._state_is_too_recent_with_debug(\n        key="missing",\n        max_age=timedelta(minutes=5),\n        label="test timestamp",\n    )\n\n    assert SECRET_ACCOUNT not in instance.name\n    assert SECRET_ACCOUNT not in caplog.text\n\n\nasync def test_statistic_logs_do_not_render_entity_id_or_energy_value(hass, caplog):\n    caplog.set_level(logging.DEBUG, logger="custom_components.ideenergy.sensor")\n    subject = SimpleNamespace(\n        hass=hass,\n        entity_id=SECRET_CUPS,\n        I_DE_ENTITY_NAME="Historical Consumption",\n    )\n\n    await sensor.IDeEnergySensor.async_calculate_statistic_data(\n        subject,\n        [SimpleNamespace(timestamp=3601, state=1.0)],\n        latest={"sum": SECRET_ENERGY, "start": 0},\n    )\n\n    assert SECRET_CUPS not in caplog.text\n    assert str(SECRET_ENERGY) not in caplog.text\n''')
+          PY
+      - name: Format changed files
+        run: |
+          python -m pip install --upgrade pre-commit
+          pre-commit run --files \
+            custom_components/ideenergy/coordinator.py \
+            custom_components/ideenergy/sensor.py \
+            tests/test_privacy_logging.py || true
+      - name: Commit privacy changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add custom_components/ideenergy/coordinator.py custom_components/ideenergy/sensor.py tests/test_privacy_logging.py
+          git commit -m "fix: redact household-sensitive integration logs"
+          git push origin HEAD:fix/privacy-safe-logging
