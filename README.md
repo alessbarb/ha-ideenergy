@@ -2,15 +2,15 @@
 
 <!-- HomeAssistant badges -->
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs)
-[![hassfest validation](https://github.com/ldotlopez/ha-ideenergy/workflows/Validate%20with%20hassfest/badge.svg)](https://github.com/ldotlopez/ha-ideenergy/actions/workflows/hassfest.yml)
-[![HACS validation](https://github.com/ldotlopez/ha-ideenergy/workflows/Validate%20with%20HACS/badge.svg)](https://github.com/ldotlopez/ha-ideenergy/actions/workflows/hacs.yml)
+[![hassfest validation](https://github.com/alessbarb/ha-ideenergy/workflows/Validate%20with%20hassfest/badge.svg)](https://github.com/alessbarb/ha-ideenergy/actions/workflows/hassfest.yml)
+[![HACS validation](https://github.com/alessbarb/ha-ideenergy/workflows/Validate%20with%20HACS/badge.svg)](https://github.com/alessbarb/ha-ideenergy/actions/workflows/hacs.yml)
 
 <!-- Code and releases -->
-![GitHub Release (latest SemVer including pre-releases)](https://img.shields.io/github/v/release/ldotlopez/ha-ideenergy?include_prereleases)
-[![CodeQL](https://github.com/ldotlopez/ha-ideenergy/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/ldotlopez/ha-ideenergy/actions/workflows/codeql-analysis.yml)
+![GitHub Release (latest SemVer including pre-releases)](https://img.shields.io/github/v/release/alessbarb/ha-ideenergy?include_prereleases)
+[![CodeQL](https://github.com/alessbarb/ha-ideenergy/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/alessbarb/ha-ideenergy/actions/workflows/codeql-analysis.yml)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/ambv/black)
 
-[ideenergy](https://github.com/ldotlopez/ideenergy) integration for [Home Assistant](https://home-assistant.io/).
+[ideenergy](https://github.com/alessbarb/ideenergy) integration for [Home Assistant](https://home-assistant.io/).
 
 i-DE (Iberdrola Distribución) Custom Integration for Home Assistant, providing energy data for customers of the Spanish electricity distributor [i-DE](https://i-de.es).
 
@@ -19,6 +19,10 @@ This integration requires an **advanced** user profile on the i-DE website.
 > **3.x is an alpha series.** It is a rewrite of the 2.x integration and uses Home Assistant statistics instead of manipulating the recorder database directly. Read the [upgrade notes](UPGRADE-TO-3.x.md) before migrating an existing installation.
 
 **Please read the [FAQ](FAQ.md), Dependencies and Warnings sections before installing.**
+
+## Maintained fork
+
+This repository is a maintained fork of [`ldotlopez/ha-ideenergy`](https://github.com/ldotlopez/ha-ideenergy). Original authorship and GPL-3.0 licensing are preserved. Issues, compatibility fixes and releases for this fork are tracked in [`alessbarb/ha-ideenergy`](https://github.com/alessbarb/ha-ideenergy).
 
 ## Features in 3.x
 
@@ -59,14 +63,14 @@ You need an i-DE username and access to the customer website. You can register t
 
 An **Advanced User** profile is also required. If your account does not have one, request it from the profile area on the i-DE website.
 
-The integration depends on the separate [`ideenergy`](https://github.com/ldotlopez/ideenergy) Python client and on [`homeassistant-historical-sensor`](https://github.com/ldotlopez/ha-historical-sensor).
+The integration pins the maintained [`alessbarb/ideenergy`](https://github.com/alessbarb/ideenergy) client to an immutable Git commit and also depends on [`homeassistant-historical-sensor`](https://github.com/ldotlopez/ha-historical-sensor).
 
 ## Installation
 
 ### HACS custom repository
 
 1. Open HACS in Home Assistant.
-2. Add `https://github.com/ldotlopez/ha-ideenergy` as a **Custom repository** with category **Integration**.
+2. Add `https://github.com/alessbarb/ha-ideenergy` as a **Custom repository** with category **Integration**.
 3. Download the desired release.
 4. Restart Home Assistant.
 5. Go to **Settings → Devices & services → Add integration** and select **i-DE Energy Monitor**.
