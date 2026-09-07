@@ -155,7 +155,7 @@ class IDeEnergySensor(CoordinatorEntity, HistoricalSensor, SensorEntity):
         # Group historical states by hour block
         #
 
-        def hour_block_for_hist_state(hist_state: HistoricalState) -> datetime:
+        def hour_block_for_hist_state(hist_state: HistoricalState) -> int:
             secs_per_hour = 60 * 60
 
             ts = ceil(hist_state.timestamp)
@@ -175,9 +175,9 @@ class IDeEnergySensor(CoordinatorEntity, HistoricalSensor, SensorEntity):
 
         try:
             total_accumulated = extract_last_sum(latest)
-        except KeyError, ValueError:
+        except KeyError, TypeError, ValueError:
             LOGGER.error(
-                f"{self.entity_id}: [bug] statistics broken (lastest={latest!r})"
+                f"{self.entity_id}: [bug] statistics broken (latest={latest!r})"
             )
             return []
 
@@ -188,7 +188,7 @@ class IDeEnergySensor(CoordinatorEntity, HistoricalSensor, SensorEntity):
         LOGGER.debug(
             f"{self.entity_id}: "
             + f"calculating statistics using {total_accumulated:.2f} as base accumulated "
-            + f"(registed at {start_point_local_dt})"
+            + f"(registered at {start_point_local_dt})"
         )
 
         #
