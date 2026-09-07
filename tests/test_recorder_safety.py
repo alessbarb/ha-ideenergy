@@ -16,8 +16,7 @@ FORBIDDEN_RECORDER_INTERNALS = (
 def test_integration_does_not_access_recorder_database_internals():
     """Keep historical imports on Home Assistant's public statistics API path."""
     sources = "\n".join(
-        path.read_text(encoding="utf-8")
-        for path in INTEGRATION_ROOT.rglob("*.py")
+        path.read_text(encoding="utf-8") for path in INTEGRATION_ROOT.rglob("*.py")
     ).lower()
 
     for forbidden in FORBIDDEN_RECORDER_INTERNALS:
