@@ -56,4 +56,3 @@ First maintained-fork prerelease built from the upstream 3.x alpha line.
 ### Known limitation
 
 - Native SMS/OTP two-factor authentication is not implemented. The private i-DE web API does not currently expose a documented, stable OTP challenge contract that can be implemented safely. If i-DE requires an SMS verification challenge, complete it through the official i-DE website or app.
-
