@@ -176,28 +176,8 @@ class IDeEnergyDataCoordinator(DataUpdateCoordinator[IDeEnergyDataCoordinatorDat
         return self.data | {k: v for k, v in updated_data.items() if v is not None}
 
     async def _async_call_client(self, afn: Callable, *args, **kwargs):
-        """Call an authenticated client endpoint with one bounded auth retry.
-
-        The coordinator must not keep the remote session alive merely because
-        Home Assistant is running. A login happens only immediately before a
-        real data request when the local session has expired. If i-DE rejects
-        an otherwise locally-valid session with HTTP 401/403, authenticate
-        once and retry the original operation once. Transient server failures
-        are deliberately propagated to DataUpdateCoordinator instead of being
-        converted into login loops.
-        """
-        if not self._client.is_logged:
-            await self._client.login()
-
-        try:
-            return await afn(*args, **kwargs)
-        except ideenergy.RequestFailedError as exc:
-            status = getattr(exc.response, "status", None)
-            if status not in (401, 403):
-                raise
-
-            await self._client.login()
-            return await afn(*args, **kwargs)
+        """Call the client and leave auth recovery to ideenergy."""
+        return await afn(*args, **kwargs)
 
     async def _async_get_direct_reading_data(self) -> dict[str, int | float] | None:
         if self._state_is_too_recent_with_debug(
