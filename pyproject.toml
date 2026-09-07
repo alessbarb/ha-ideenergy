@@ -1,6 +1,6 @@
 [project]
 name = "homeassistant-ideenergy"
-version = "2026.1.0"
+version = "3.0.0a3"
 dependencies = [
     "importlib-metadata; python_version >= '3.14'",
 ]

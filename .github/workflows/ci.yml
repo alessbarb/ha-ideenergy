@@ -5,6 +5,8 @@ on:
   push:
     branches:
       - main
+    tags:
+      - "v*"
 
 permissions:
   contents: read
@@ -35,6 +37,66 @@ jobs:
 
       - name: Compile integration
         run: python -m compileall -q custom_components/ideenergy
+
+  release-metadata:
+    name: Release Metadata
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Verify version and pinned client
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import re
+          import tomllib
+          from pathlib import Path
+
+          manifest = json.loads(Path("custom_components/ideenergy/manifest.json").read_text())
+          with Path("pyproject.toml").open("rb") as file:
+              project = tomllib.load(file)
+
+          manifest_version = manifest["version"]
+          project_version = project["project"]["version"]
+          if manifest_version != project_version:
+              raise SystemExit(
+                  f"version mismatch: manifest={manifest_version}, pyproject={project_version}"
+              )
+
+          if not re.fullmatch(r"\d+\.\d+\.\d+(?:(?:a|b|rc)\d+)?", manifest_version):
+              raise SystemExit(f"unsupported integration version format: {manifest_version}")
+
+          client_requirements = [
+              requirement
+              for requirement in manifest["requirements"]
+              if requirement.startswith("ideenergy@git+")
+          ]
+          if len(client_requirements) != 1:
+              raise SystemExit("manifest must contain exactly one immutable ideenergy Git requirement")
+
+          client_requirement = client_requirements[0]
+          if not re.fullmatch(
+              r"ideenergy@git\+https://github\.com/alessbarb/ideenergy\.git@[0-9a-f]{40}",
+              client_requirement,
+          ):
+              raise SystemExit(f"ideenergy requirement is not pinned to a full SHA: {client_requirement}")
+
+          ref = os.environ.get("GITHUB_REF", "")
+          if ref.startswith("refs/tags/"):
+              tag = ref.removeprefix("refs/tags/")
+              expected_tag = f"v{manifest_version}"
+              if tag != expected_tag:
+                  raise SystemExit(f"tag mismatch: expected {expected_tag}, got {tag}")
+
+          print(f"release metadata valid for {manifest_version}")
+          PY
 
   tests:
     name: Home Assistant ${{ matrix.homeassistant }}
