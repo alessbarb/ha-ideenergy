@@ -36,11 +36,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import slugify
-from homeassistant_historical_sensor import (
-    HistoricalSensor,
-    HistoricalState,
-    hass_get_last_statistic,
-)
+from homeassistant_historical_sensor import HistoricalSensor, HistoricalState
 
 from .coordinator import (
     MEASURE_ACCUMULATED_KEY,
@@ -139,22 +135,27 @@ class IDeEnergySensor(CoordinatorEntity, HistoricalSensor, SensorEntity):
         self, hist_states: list[HistoricalState], *, latest: dict | None = None
     ) -> list[StatisticData]:
         #
-        # Filter out invalid states
+        # Filter out invalid states. Zero is a legitimate energy value and must
+        # be preserved in Home Assistant statistics.
         #
 
         n_original_hist_states = len(hist_states)
-        hist_states = [x for x in hist_states if x.state not in (0, None)]
+        hist_states = [x for x in hist_states if x.state is not None]
         if len(hist_states) != n_original_hist_states:
             LOGGER.warning(
                 f"{self.entity_id}: "
                 + "found some weird values in historical statistics"
             )
 
+        # itertools.groupby only combines adjacent values. Explicit sorting
+        # avoids depending on the remote API returning periods in order.
+        hist_states = sorted(hist_states, key=lambda x: x.timestamp)
+
         #
         # Group historical states by hour block
         #
 
-        def hour_block_for_hist_state(hist_state: HistoricalState) -> datetime:
+        def hour_block_for_hist_state(hist_state: HistoricalState) -> int:
             secs_per_hour = 60 * 60
 
             ts = ceil(hist_state.timestamp)
@@ -166,8 +167,6 @@ class IDeEnergySensor(CoordinatorEntity, HistoricalSensor, SensorEntity):
 
             return block * secs_per_hour
 
-        latest = await hass_get_last_statistic(self.hass, self.get_statistic_metadata())
-
         #
         # Get last sum sum from latest
         #
@@ -176,9 +175,9 @@ class IDeEnergySensor(CoordinatorEntity, HistoricalSensor, SensorEntity):
 
         try:
             total_accumulated = extract_last_sum(latest)
-        except KeyError, ValueError:
+        except KeyError, TypeError, ValueError:
             LOGGER.error(
-                f"{self.entity_id}: [bug] statistics broken (lastest={latest!r})"
+                f"{self.entity_id}: [bug] statistics broken (latest={latest!r})"
             )
             return []
 
@@ -189,7 +188,7 @@ class IDeEnergySensor(CoordinatorEntity, HistoricalSensor, SensorEntity):
         LOGGER.debug(
             f"{self.entity_id}: "
             + f"calculating statistics using {total_accumulated:.2f} as base accumulated "
-            + f"(registed at {start_point_local_dt})"
+            + f"(registered at {start_point_local_dt})"
         )
 
         #
